@@ -1,23 +1,30 @@
 # Results
 
-This file tracks benchmark outcomes. Update with each new experiment, and include the environment details (CPU model, threads, container limits).
+This file tracks benchmark outcomes. Update it via `update_results_md.py` after
+each container run. Each section is keyed by SUT name and core/memory limits.
 
-## Container: 4 cores / 4GB RAM
+## How to update
 
-Run the container comparison:
+Run the container workflow and it will update this file automatically:
 
 ```bash
-./run_container_4c4g_compare.sh
+CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh
 ```
 
-The latest table is written to:
+Manual update example:
 
-- `results/benchmarks/container_4c4g/summary_table.md`
-- `results/benchmarks/container_4c4g/summary_table.csv`
+```bash
+python3 update_results_md.py \
+  --results-md RESULTS.md \
+  --summary-table results/benchmarks/container_4c4g/summary_table.md \
+  --sut-name default \
+  --core-count 4 \
+  --memory-gb 4
+```
 
-### Latest results (end-to-end p95 time)
-
-Environment: container limited to 4 cores / 4GB RAM. CPU model not recorded.
+<!-- RESULTS:default:4c:4g START -->
+## default - 4 cores / 4GB RAM
+Updated: not recorded
 
 | Implementation | Precision | Beam size | Time | RAM Usage |
 | --- | --- | --- | --- | --- |
@@ -27,3 +34,5 @@ Environment: container limited to 4 cores / 4GB RAM. CPU model not recorded.
 | onnxruntime rust (int8) | int8 | 1 | 8s | 1231MB |
 | faster-whisper (fp32) | fp32 | 1 | 21s | 1136MB |
 | faster-whisper (int8) | int8 | 1 | 29s | 905MB |
+
+<!-- RESULTS:default:4c:4g END -->

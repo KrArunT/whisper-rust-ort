@@ -141,11 +141,27 @@ Run all implementations inside a pinned container (4 cores, 4GB) and write a sum
 ./run_container_4c4g_compare.sh
 ```
 
+Run multiple core counts (default is 4 only):
+
+```bash
+CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh
+```
+
+Tag results per system-under-test (SUT):
+
+```bash
+SUT_NAME=epyc-9654 ./run_container_4c4g_compare.sh
+```
+
 Outputs:
 
 - `results/benchmarks/container_4c4g/summary_table.md`
 - `results/benchmarks/container_4c4g/summary_table.csv`
 - `results/benchmarks/container_4c4g/logs/*.time.txt` (RSS and wall time)
+
+For other core counts or SUT names, outputs are written under:
+
+- `results/benchmarks/container_<cores>c_<memory>g/<SUT_NAME>/`
 
 Optional overrides:
 
@@ -161,3 +177,6 @@ Fix with:
 ```bash
 sudo chown -R $USER:$USER results/benchmarks/container_4c4g
 ```
+
+`RESULTS.md` is updated automatically by `run_container_4c4g_compare.sh`. You can
+also update it manually with `update_results_md.py`.
