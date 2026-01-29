@@ -8,9 +8,11 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - `benchmark_with_hf_pipeline.py`: HF pipeline benchmark outputting summary JSON.
 - `benchmark_without_hf_pipeline.py`: Python no‑HF pipeline benchmark with detailed timing.
 - `benchmark_faster_whisper.py`: faster‑whisper benchmark.
+- `compare_container_benchmarks.py`: summarize container runs into a table.
 - Shell runners: `benchmark_without_hf_pipeline.sh`, `run_benchmark_without_hf_pipeline_rust.sh`, `run_all_and_compare.sh`.
+- Container scripts: `Dockerfile.container`, `run_container_4c4g_compare.sh`, `scripts/run_container_4c4g_inner.sh`.
 - Assets: `audio/` input files, `whisper-base-with-past/` ONNX models + tokenizer.
-- Outputs: `results/benchmarks/**` and `results_py/benchmarks/**`.
+- Outputs: `results/benchmarks/**`, `results_py/benchmarks/**`, `RESULTS.md`.
 
 ## Build, Test, and Development Commands
 - `cargo build --release`: build Rust benchmark.
@@ -21,6 +23,7 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - `uv run python benchmark_faster_whisper.py --cpu_threads 8`: run faster‑whisper benchmark.
 - `uv run python compare_end_to_end_latencies.py`: compare end‑to‑end p95 latencies.
 - `./run_all_and_compare.sh`: run all benchmarks + compare.
+- `./run_container_4c4g_compare.sh`: run container benchmarks (4 cores/4GB) + generate summary table.
 
 ## Coding Style & Naming Conventions
 - Python: 4‑space indentation, snake_case functions/files, UPPER_CASE constants.
@@ -51,3 +54,4 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 
 ## Results
 - Log results of different experiments in a seperate RESULTS.md too.
+- Capture container summary tables under `results/benchmarks/container_4c4g/summary_table.md`.

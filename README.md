@@ -7,8 +7,13 @@ Optimize end-to-end transcription latency for FP32 `openai/whisper-base` on CPU 
 - `src/main.rs`: Rust benchmark CLI (audio decode → log-mel → encoder → decoder → decode → metrics).
 - `whisper-base-with-past/`: ONNX export (encoder / decoder / decoder_with_past) + generation config.
 - `audio/`: input samples.
-- `results/`: Rust outputs.
+- `benchmark_with_hf_pipeline.py`: HF pipeline benchmark (summary JSON).
+- `benchmark_without_hf_pipeline.py`: Python no‑HF pipeline benchmark.
+- `benchmark_faster_whisper.py`: faster‑whisper benchmark.
+- `compare_container_benchmarks.py`: build a summary table from container runs.
+- `results/`: benchmark outputs (including container summary tables).
 - `results_py/`: baseline outputs from Python for comparison.
+- `RESULTS.md`: experiment log.
 
 ## Quick start
 
@@ -133,8 +138,12 @@ Outputs:
 
 - `results/benchmarks/container_4c4g/summary_table.md`
 - `results/benchmarks/container_4c4g/summary_table.csv`
+- `results/benchmarks/container_4c4g/logs/*.time.txt` (RSS and wall time)
 
 Optional overrides:
 
 - `CPUSET=0-3` to pick specific CPU cores.
 - `IMAGE=whisper-rust-ort:4c4g` to reuse a prebuilt image.
+
+Note: the Time column in `summary_table.md` uses end‑to‑end p95 latency from each
+`inference_summary.json` (falls back to wall time if missing).
