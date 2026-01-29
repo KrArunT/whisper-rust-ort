@@ -25,7 +25,11 @@ cpu_range() {
 
 for cores in ${CORES_LIST}; do
   cpuset="${CPUSET:-$(cpu_range "${cores}" "${CPUSET_START}")}"
-  out_base="${OUT_ROOT}/container_${cores}c_${MEMORY_GB}g"
+  if [[ "${cores}" == "4" && "${MEMORY_GB}" == "4" ]]; then
+    out_base="${OUT_ROOT}/container_4c4g"
+  else
+    out_base="${OUT_ROOT}/container_${cores}c${MEMORY_GB}g"
+  fi
   if [[ -n "${SUT_NAME}" ]]; then
     out_base="${out_base}/${SUT_NAME}"
   fi
@@ -56,7 +60,7 @@ for cores in ${CORES_LIST}; do
     "${IMAGE}" \
     bash -lc "scripts/run_container_4c4g_inner.sh"
 
-  python3 update_results_md.py \
+  uv run update_results_md.py \
     --results-md "${RESULTS_MD}" \
     --summary-table "${out_base}/summary_table.md" \
     --sut-name "${SUT_NAME:-default}" \

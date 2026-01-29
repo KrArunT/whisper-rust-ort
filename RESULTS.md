@@ -36,3 +36,33 @@ Updated: not recorded
 | faster-whisper (int8) | int8 | 1 | 29s | 905MB |
 
 <!-- RESULTS:default:4c:4g END -->
+
+<!-- RESULTS:BLR-L-ARTIWARY:4c:4g START -->
+## BLR-L-ARTIWARY - 4 cores / 4GB RAM
+Updated: 2026-01-29T17:20:43
+
+| Implementation | Precision | Beam size | Time | RAM Usage |
+| --- | --- | --- | --- | --- |
+| openai/whisper (HF pipeline) | fp32 | 1 | 1m16s | 1724MB |
+| onnxruntime python (no HF pipeline) | fp32 | 1 | 1m16s | 1910MB |
+| onnxruntime rust (no HF pipeline) | fp32 | 1 | n/a | 2MB |
+| onnxruntime rust (int8) | int8 | 1 | n/a | 2MB |
+| faster-whisper (fp32) | fp32 | 1 | 23s | 1142MB |
+| faster-whisper (int8) | int8 | 1 | 29s | 908MB |
+
+<!-- RESULTS:BLR-L-ARTIWARY:4c:4g END -->
+
+<!-- RESULTS:epyc-9654:4c:4g START -->
+## epyc-9654 - 4 cores / 4GB RAM
+Updated: 2026-01-29T17:33:37
+
+| Implementation | Precision | Beam size | Time | RAM Usage |
+| --- | --- | --- | --- | --- |
+| openai/whisper (HF pipeline) | fp32 | 1 | 1m13s | 1724MB |
+| onnxruntime python (no HF pipeline) | fp32 | 1 | 1m25s | 1906MB |
+| onnxruntime rust (no HF pipeline) | fp32 | 1 | 15s | 2126MB |
+| onnxruntime rust (int8) | int8 | 1 | 9s | 1206MB |
+| faster-whisper (fp32) | fp32 | 1 | 23s | 1133MB |
+| faster-whisper (int8) | int8 | 1 | 34s | 905MB |
+
+<!-- RESULTS:epyc-9654:4c:4g END -->

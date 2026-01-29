@@ -58,3 +58,4 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - Log results of different experiments in a seperate RESULTS.md too.
 - Capture container summary tables under `results/benchmarks/container_4c4g/summary_table.md`.
 - Use `RESULTS.md` markers to keep per‑SUT, per‑core results in one file.
+- For other core counts, use `results/benchmarks/container_<cores>c<memory>g/<SUT_NAME>/`.

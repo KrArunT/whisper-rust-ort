@@ -161,7 +161,7 @@ Outputs:
 
 For other core counts or SUT names, outputs are written under:
 
-- `results/benchmarks/container_<cores>c_<memory>g/<SUT_NAME>/`
+- `results/benchmarks/container_<cores>c<memory>g/<SUT_NAME>/`
 
 Optional overrides:
 
@@ -180,3 +180,7 @@ sudo chown -R $USER:$USER results/benchmarks/container_4c4g
 
 `RESULTS.md` is updated automatically by `run_container_4c4g_compare.sh`. You can
 also update it manually with `update_results_md.py`.
+
+Note: the container image now prebuilds the Rust binary to avoid downloading
+crates on every run. Set `FORCE_BUILD_RUST=1` if you need to rebuild from the
+mounted workspace sources.

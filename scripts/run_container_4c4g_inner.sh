@@ -18,20 +18,24 @@ WARMUP="${WARMUP:-1}"
 WRITE_TXT="${WRITE_TXT:-1}"
 HF_MODEL_ID="${HF_MODEL_ID:-openai/whisper-base}"
 FW_MODEL_ID="${FW_MODEL_ID:-Systran/faster-whisper-base}"
+RUST_BIN="${RUST_BIN:-/usr/local/bin/whisper_ort_bench}"
+FORCE_BUILD_RUST="${FORCE_BUILD_RUST:-0}"
 
-WRITE_TXT_FLAG=()
+WRITE_TXT_FLAG_PY=()
+WRITE_TXT_FLAG_RS=()
 if [[ "${WRITE_TXT}" != "0" ]]; then
-  WRITE_TXT_FLAG=(--write-txt)
+  WRITE_TXT_FLAG_PY=(--write_txt)
+  WRITE_TXT_FLAG_RS=(--write-txt)
 fi
 
 if [[ -z "${OUT_BASE}" ]]; then
-  if [[ -z "${SUT_NAME}" && "${CORE_COUNT}" == "4" && "${MEMORY_GB}" == "4" ]]; then
+  if [[ "${CORE_COUNT}" == "4" && "${MEMORY_GB}" == "4" ]]; then
     OUT_BASE="${OUT_ROOT}/container_4c4g"
   else
-    OUT_BASE="${OUT_ROOT}/container_${CORE_COUNT}c_${MEMORY_GB}g"
-    if [[ -n "${SUT_NAME}" ]]; then
-      OUT_BASE="${OUT_BASE}/${SUT_NAME}"
-    fi
+    OUT_BASE="${OUT_ROOT}/container_${CORE_COUNT}c${MEMORY_GB}g"
+  fi
+  if [[ -n "${SUT_NAME}" ]]; then
+    OUT_BASE="${OUT_BASE}/${SUT_NAME}"
   fi
 fi
 
@@ -57,7 +61,10 @@ if [[ ! -d whisper-base-with-past-int8 ]]; then
   run_timed "quantize_int8" uv run python quantize_onnx_int8.py
 fi
 
-cargo build --release
+if [[ "${FORCE_BUILD_RUST}" != "0" || ! -x "${RUST_BIN}" ]]; then
+  cargo build --release
+  RUST_BIN="./target/release/whisper_ort_bench"
+fi
 
 run_timed "with_hf_pipeline" \
   uv run python benchmark_with_hf_pipeline.py \
@@ -71,7 +78,7 @@ run_timed "with_hf_pipeline" \
   --inter_op 1 \
   --num_beams "${NUM_BEAMS}" \
   --warmup "${WARMUP}" \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_PY[@]}" \
   --out_csv "${OUT_BASE}/with_hf_pipeline/inference_per_file.csv" \
   --out_json "${OUT_BASE}/with_hf_pipeline/inference_per_file.json" \
   --out_summary_json "${OUT_BASE}/with_hf_pipeline/inference_summary.json"
@@ -88,13 +95,13 @@ run_timed "without_hf_pipeline_py" \
   --inter_op 1 \
   --num_beams "${NUM_BEAMS}" \
   --warmup "${WARMUP}" \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_PY[@]}" \
   --out_csv "${OUT_BASE}/without_hf_pipeline_py/inference_per_file.csv" \
   --out_json "${OUT_BASE}/without_hf_pipeline_py/inference_per_file.json" \
   --out_summary_json "${OUT_BASE}/without_hf_pipeline_py/inference_summary.json"
 
 run_timed "without_hf_pipeline_rust" \
-  ./target/release/whisper_ort_bench \
+  "${RUST_BIN}" \
   --audio-dir "${AUDIO_DIR}" \
   --onnx-dir "${ONNX_DIR}" \
   --language "${LANGUAGE}" \
@@ -104,13 +111,13 @@ run_timed "without_hf_pipeline_rust" \
   --inter-op 1 \
   --chunk-parallelism "${CORE_COUNT}" \
   --warmup "${WARMUP}" \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_RS[@]}" \
   --out-csv "${OUT_BASE}/without_hf_pipeline_rust/inference_per_file.csv" \
   --out-json "${OUT_BASE}/without_hf_pipeline_rust/inference_per_file.json" \
   --out-summary-json "${OUT_BASE}/without_hf_pipeline_rust/inference_summary.json"
 
 run_timed "without_hf_pipeline_rust_int8" \
-  ./target/release/whisper_ort_bench \
+  "${RUST_BIN}" \
   --audio-dir "${AUDIO_DIR}" \
   --onnx-dir "${ONNX_INT8_DIR}" \
   --language "${LANGUAGE}" \
@@ -120,7 +127,7 @@ run_timed "without_hf_pipeline_rust_int8" \
   --inter-op 1 \
   --chunk-parallelism "${CORE_COUNT}" \
   --warmup "${WARMUP}" \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_RS[@]}" \
   --out-csv "${OUT_BASE}/without_hf_pipeline_rust_int8/inference_per_file.csv" \
   --out-json "${OUT_BASE}/without_hf_pipeline_rust_int8/inference_per_file.json" \
   --out-summary-json "${OUT_BASE}/without_hf_pipeline_rust_int8/inference_summary.json"
@@ -137,7 +144,7 @@ run_timed "faster_whisper_fp32" \
   --compute_type float32 \
   --beam_size "${NUM_BEAMS}" \
   --best_of 1 \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_PY[@]}" \
   --out_csv "${OUT_BASE}/faster_whisper_fp32/inference_per_file.csv" \
   --out_json "${OUT_BASE}/faster_whisper_fp32/inference_per_file.json" \
   --out_summary_json "${OUT_BASE}/faster_whisper_fp32/inference_summary.json"
@@ -154,7 +161,7 @@ run_timed "faster_whisper_int8" \
   --compute_type int8 \
   --beam_size "${NUM_BEAMS}" \
   --best_of 1 \
-  "${WRITE_TXT_FLAG[@]}" \
+  "${WRITE_TXT_FLAG_PY[@]}" \
   --out_csv "${OUT_BASE}/faster_whisper_int8/inference_per_file.csv" \
   --out_json "${OUT_BASE}/faster_whisper_int8/inference_per_file.json" \
   --out_summary_json "${OUT_BASE}/faster_whisper_int8/inference_summary.json"
