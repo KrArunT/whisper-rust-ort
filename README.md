@@ -11,6 +11,7 @@ Optimize end-to-end transcription latency for FP32 `openai/whisper-base` on CPU 
 - `benchmark_without_hf_pipeline.py`: Python no‑HF pipeline benchmark.
 - `benchmark_faster_whisper.py`: faster‑whisper benchmark.
 - `compare_container_benchmarks.py`: build a summary table from container runs.
+- `run_container_4c4g_compare.sh`: run all benchmarks in a 4c/4GB container.
 - `results/`: benchmark outputs (including container summary tables).
 - `results_py/`: baseline outputs from Python for comparison.
 - `RESULTS.md`: experiment log.
@@ -125,6 +126,12 @@ PY
 - Keep `whisper-base-with-past/` unchanged between runs.
 - Use the same `audio/` files and the same `tokenizer.json`.
 - Record CPU model and thread settings along with `results/benchmarks/inference_summary.json`.
+- If you run the container workflow, record the container limits and CPU pinning.
+
+## Results
+
+The latest consolidated results live in `RESULTS.md`. The container summary table
+is generated at `results/benchmarks/container_4c4g/summary_table.md`.
 
 ## Container comparison (4 cores / 4GB RAM)
 
@@ -147,3 +154,10 @@ Optional overrides:
 
 Note: the Time column in `summary_table.md` uses end‑to‑end p95 latency from each
 `inference_summary.json` (falls back to wall time if missing).
+
+If the container runs as root, output files may be owned by root on the host.
+Fix with:
+
+```bash
+sudo chown -R $USER:$USER results/benchmarks/container_4c4g
+```
