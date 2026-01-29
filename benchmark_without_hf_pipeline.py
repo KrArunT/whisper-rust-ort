@@ -196,6 +196,7 @@ def generate_longform_full(
     language: str,
     task: str,
     max_new_tokens: int,
+    num_beams: int,
     forced_decoder_ids,
 ) -> Tuple[str, Dict[str, float]]:
     """
@@ -238,7 +239,7 @@ def generate_longform_full(
             language=language,
             task=task,
             max_new_tokens=max_new_tokens,
-            num_beams=1,
+            num_beams=num_beams,
             do_sample=False,
         )
     except TypeError:
@@ -248,7 +249,7 @@ def generate_longform_full(
             return_timestamps=True,
             forced_decoder_ids=forced_decoder_ids,
             max_new_tokens=max_new_tokens,
-            num_beams=1,
+            num_beams=num_beams,
             do_sample=False,
         )
     model_only_s = time.perf_counter() - t_m0
@@ -288,6 +289,7 @@ def main():
     # IMPORTANT: max_new_tokens=256 can be too small depending on speech density;
     # long-form usually doesn’t need huge values, but you can raise it.
     ap.add_argument("--max_new_tokens", type=int, default=128)
+    ap.add_argument("--num_beams", type=int, default=1)
 
     ap.add_argument("--warmup", type=int, default=0)
     ap.add_argument("--intra_op", type=int, default=0)
@@ -311,6 +313,7 @@ def main():
         cfg["intra_op"] = int(args.intra_op)
     if args.inter_op and args.inter_op > 0:
         cfg["inter_op"] = int(args.inter_op)
+    cfg["num_beams"] = int(args.num_beams)
 
     # Optional: keep torch thread count aligned (reduces variance)
     try:
@@ -347,6 +350,7 @@ def main():
                 language=args.language,
                 task=args.task,
                 max_new_tokens=args.max_new_tokens,
+                num_beams=args.num_beams,
                 forced_decoder_ids=forced_decoder_ids,
             )
 
@@ -381,6 +385,7 @@ def main():
             language=args.language,
             task=args.task,
             max_new_tokens=args.max_new_tokens,
+            num_beams=args.num_beams,
             forced_decoder_ids=forced_decoder_ids,
         )
 

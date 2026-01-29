@@ -60,6 +60,8 @@ def main() -> None:
     ap.add_argument("--cpu_threads", type=int, default=8)
     ap.add_argument("--num_workers", type=int, default=1)
     ap.add_argument("--compute_type", default="float32")
+    ap.add_argument("--beam_size", type=int, default=1)
+    ap.add_argument("--best_of", type=int, default=1)
 
     ap.add_argument("--out_csv", default="results/benchmarks/faster_whisper/inference_per_file.csv")
     ap.add_argument("--out_json", default="results/benchmarks/faster_whisper/inference_per_file.json")
@@ -94,8 +96,8 @@ def main() -> None:
                 os.path.join(args.audio_dir, files[0]),
                 language=args.language,
                 task=args.task,
-                beam_size=1,
-                best_of=1,
+                beam_size=args.beam_size,
+                best_of=args.best_of,
                 temperature=0.0,
             )[0]
         )
@@ -113,8 +115,8 @@ def main() -> None:
             path,
             language=args.language,
             task=args.task,
-            beam_size=1,
-            best_of=1,
+            beam_size=args.beam_size,
+            best_of=args.best_of,
             temperature=0.0,
         )
         text = "".join(seg.text for seg in segments).strip()
@@ -153,6 +155,8 @@ def main() -> None:
             "cpu_threads": args.cpu_threads,
             "num_workers": args.num_workers,
             "compute_type": args.compute_type,
+            "beam_size": args.beam_size,
+            "best_of": args.best_of,
         },
         "n_files": len(rows),
         "latency_end_to_end_s": stat_block(end2end_list),

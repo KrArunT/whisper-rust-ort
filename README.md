@@ -120,3 +120,21 @@ PY
 - Keep `whisper-base-with-past/` unchanged between runs.
 - Use the same `audio/` files and the same `tokenizer.json`.
 - Record CPU model and thread settings along with `results/benchmarks/inference_summary.json`.
+
+## Container comparison (4 cores / 4GB RAM)
+
+Run all implementations inside a pinned container (4 cores, 4GB) and write a summary table:
+
+```bash
+./run_container_4c4g_compare.sh
+```
+
+Outputs:
+
+- `results/benchmarks/container_4c4g/summary_table.md`
+- `results/benchmarks/container_4c4g/summary_table.csv`
+
+Optional overrides:
+
+- `CPUSET=0-3` to pick specific CPU cores.
+- `IMAGE=whisper-rust-ort:4c4g` to reuse a prebuilt image.

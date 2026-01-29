@@ -58,6 +58,7 @@ def main() -> None:
     ap.add_argument("--language", default="en")
     ap.add_argument("--task", default="transcribe")
     ap.add_argument("--max_new_tokens", type=int, default=400)
+    ap.add_argument("--num_beams", type=int, default=1)
     ap.add_argument("--intra_op", type=int, default=8)
     ap.add_argument("--inter_op", type=int, default=1)
     ap.add_argument("--warmup", type=int, default=1)
@@ -100,7 +101,7 @@ def main() -> None:
         feature_extractor=processor.feature_extractor,
         chunk_length_s=30,
         stride_length_s=(1, 1),
-        generate_kwargs={"max_new_tokens": args.max_new_tokens, "num_beams": 1, "do_sample": False},
+        generate_kwargs={"max_new_tokens": args.max_new_tokens, "num_beams": args.num_beams, "do_sample": False},
     )
 
     files = sorted(
@@ -172,8 +173,9 @@ def main() -> None:
 
     summary = {
         "config_used": {
-            "ORT_INTRA_OP": int(os.getenv("ORT_INTRA_OP", 8)),
-            "ORT_INTER_OP": int(os.getenv("ORT_INTER_OP", 1)),
+            "ORT_INTRA_OP": int(args.intra_op),
+            "ORT_INTER_OP": int(args.inter_op),
+            "num_beams": args.num_beams,
         },
         "n_files": len(rows),
         "latency_end_to_end_s": stat_block(end2end_list),
