@@ -1,0 +1,17 @@
+# Rust
+/target/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Benchmark artifacts
+/results/
+
+# Local models and generated assets
+/whisper-base-with-past/
+/whisper-base-with-past-int8/
+
+# OS
+.DS_Store

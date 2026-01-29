@@ -1,0 +1,12 @@
+uv run benchmark_without_hf_pipeline.py \
+  --audio_dir audio \
+  --onnx_dir whisper-base-with-past \
+  --model_id openai/whisper-base \
+  --language en --task transcribe \
+  --max_new_tokens 128 \
+  --intra_op 8 \
+  --inter_op 1 \
+  --write_txt \
+  --out_csv results/benchmarks/without_hf_pipeline_py/inference_per_file.csv \
+  --out_json results/benchmarks/without_hf_pipeline_py/inference_per_file.json \
+  --out_summary_json results/benchmarks/without_hf_pipeline_py/inference_summary.json

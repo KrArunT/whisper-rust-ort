@@ -1,0 +1,14 @@
+cargo run --release -- \
+    --audio-dir audio \
+    --onnx-dir whisper-base-with-past \
+    --language en \
+    --task transcribe \
+    --max-new-tokens 128 \
+    --intra-op 1 \
+    --inter-op 1 \
+    --chunk-parallelism 8 \
+    --warmup 1 \
+    --write-txt \
+    --out-csv results/benchmarks/without_hf_pipeline_rust/inference_per_file.csv \
+    --out-json results/benchmarks/without_hf_pipeline_rust/inference_per_file.json \
+    --out-summary-json results/benchmarks/without_hf_pipeline_rust/inference_summary.json
