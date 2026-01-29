@@ -147,6 +147,12 @@ Run multiple core counts (default is 4 only):
 CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh
 ```
 
+Merge existing summary tables into RESULTS without running benchmarks:
+
+```bash
+MERGE_ONLY=1 ./run_container_4c4g_compare.sh
+```
+
 Tag results per system-under-test (SUT):
 
 ```bash
@@ -180,6 +186,9 @@ sudo chown -R $USER:$USER results/benchmarks/container_4c4g
 
 `RESULTS.md` is updated automatically by `run_container_4c4g_compare.sh`. You can
 also update it manually with `update_results_md.py`.
+
+`RESULTS.csv` is appended on every run with per‑implementation rows and extra
+columns (timestamp, SUT, core count, memory limit).
 
 Note: the container image now prebuilds the Rust binary to avoid downloading
 crates on every run. Set `FORCE_BUILD_RUST=1` if you need to rebuild from the

@@ -26,6 +26,7 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - `./run_all_and_compare.sh`: run all benchmarks + compare.
 - `./run_container_4c4g_compare.sh`: run container benchmarks (4 cores/4GB) + generate summary table.
 - `CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh`: run multiple core counts.
+- `MERGE_ONLY=1 ./run_container_4c4g_compare.sh`: merge existing summary tables into results.
 
 ## Coding Style & Naming Conventions
 - Python: 4‑space indentation, snake_case functions/files, UPPER_CASE constants.
@@ -59,3 +60,4 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - Capture container summary tables under `results/benchmarks/container_4c4g/summary_table.md`.
 - Use `RESULTS.md` markers to keep per‑SUT, per‑core results in one file.
 - For other core counts, use `results/benchmarks/container_<cores>c<memory>g/<SUT_NAME>/`.
+- Append per-run rows to `RESULTS.csv` for cross-SUT comparisons.

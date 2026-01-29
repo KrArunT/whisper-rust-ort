@@ -10,7 +10,9 @@ CPUSET_START="${CPUSET_START:-0}"
 SUT_NAME="${SUT_NAME:-$(hostname -s)}"
 OUT_ROOT="${OUT_ROOT:-results/benchmarks}"
 RESULTS_MD="${RESULTS_MD:-RESULTS.md}"
+RESULTS_CSV="${RESULTS_CSV:-RESULTS.csv}"
 BUILD_IMAGE="${BUILD_IMAGE:-1}"
+MERGE_ONLY="${MERGE_ONLY:-0}"
 
 if [[ "${BUILD_IMAGE}" != "0" ]]; then
   docker build -t "${IMAGE}" -f "${ROOT_DIR}/${DOCKERFILE}" "${ROOT_DIR}"
@@ -22,6 +24,57 @@ cpu_range() {
   local end=$((start + cores - 1))
   echo "${start}-${end}"
 }
+
+merge_existing_tables() {
+  local tables
+  tables="$(find "${OUT_ROOT}" -type f -name summary_table.md -path '*/container_*/*' 2>/dev/null || true)"
+  if [[ -z "${tables}" ]]; then
+    echo "No summary_table.md files found under ${OUT_ROOT}"
+    return 0
+  fi
+  while IFS= read -r table; do
+    local sut_dir container_dir container_name sut_name cores mem summary_csv
+    sut_dir="$(dirname "${table}")"
+    container_dir="$(dirname "${sut_dir}")"
+    container_name="$(basename "${container_dir}")"
+    sut_name="$(basename "${sut_dir}")"
+
+    if [[ "${container_name}" == container_* ]]; then
+      if [[ "${sut_name}" == container_* ]]; then
+        sut_name="default"
+      fi
+    else
+      container_name="$(basename "${sut_dir}")"
+      sut_name="default"
+    fi
+
+    if [[ "${container_name}" =~ ^container_([0-9]+)c([0-9]+)g$ ]]; then
+      cores="${BASH_REMATCH[1]}"
+      mem="${BASH_REMATCH[2]}"
+    elif [[ "${container_name}" == "container_4c4g" ]]; then
+      cores="4"
+      mem="4"
+    else
+      echo "Skip (unrecognized container dir): ${container_name}"
+      continue
+    fi
+
+    summary_csv="${table%.md}.csv"
+    uv run update_results_md.py \
+      --results-md "${RESULTS_MD}" \
+      --summary-table "${table}" \
+      --summary-csv "${summary_csv}" \
+      --sut-name "${sut_name}" \
+      --core-count "${cores}" \
+      --memory-gb "${mem}" \
+      --results-csv "${RESULTS_CSV}"
+  done <<< "${tables}"
+}
+
+if [[ "${MERGE_ONLY}" != "0" ]]; then
+  merge_existing_tables
+  exit 0
+fi
 
 for cores in ${CORES_LIST}; do
   cpuset="${CPUSET:-$(cpu_range "${cores}" "${CPUSET_START}")}"
@@ -60,10 +113,45 @@ for cores in ${CORES_LIST}; do
     "${IMAGE}" \
     bash -lc "scripts/run_container_4c4g_inner.sh"
 
+#   uv run update_results_md.py \
+#     --results-md "${RESULTS_MD}" \
+#     --summary-table "${out_base}/summary_table.md" \
+#     --summary-csv "${out_base}/summary_table.csv" \
+#     --sut-name "${SUT_NAME:-default}" \
+#     --core-count "${cores}" \
+#     --memory-gb "${MEMORY_GB}" \
+#     --results-csv "${RESULTS_CSV}"
+# done
+
+# optional: start fresh
+# rm -f RESULTS.md RESULTS.csv
+
+find results/benchmarks -type f -name summary_table.md -path '*/container_*/*' | while read -r table; do
+  sut_dir="$(dirname "$table")"
+  parent="$(basename "$sut_dir")"
+  if [[ "$parent" == container_* ]]; then
+    sut_name="default"
+    container_name="$parent"
+  else
+    sut_name="$parent"
+    container_name="$(basename "$(dirname "$sut_dir")")"
+  fi
+
+  if [[ "$container_name" =~ ^container_([0-9]+)c([0-9]+)g$ ]]; then
+    cores="${BASH_REMATCH[1]}"
+    mem="${BASH_REMATCH[2]}"
+  else
+    echo "Skip: unexpected path $container_name"
+    continue
+  fi
+
+  summary_csv="${table%.md}.csv"
   uv run update_results_md.py \
-    --results-md "${RESULTS_MD}" \
-    --summary-table "${out_base}/summary_table.md" \
-    --sut-name "${SUT_NAME:-default}" \
-    --core-count "${cores}" \
-    --memory-gb "${MEMORY_GB}"
+    --results-md RESULTS.md \
+    --summary-table "$table" \
+    --summary-csv "$summary_csv" \
+    --sut-name "$sut_name" \
+    --core-count "$cores" \
+    --memory-gb "$mem" \
+    --results-csv RESULTS.csv
 done
