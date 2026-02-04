@@ -1,0 +1,79 @@
+{
+  "config_used": {
+    "intra_op": 8,
+    "inter_op": 1,
+    "execution_mode": "SEQUENTIAL",
+    "graph_opt": "ENABLE_ALL",
+    "cpu_mem_arena": true,
+    "mem_pattern": true,
+    "allow_spinning": true,
+    "num_beams": 1
+  },
+  "n_files": 1,
+  "latency_model_only_s": {
+    "min": 175.906008,
+    "median": 175.906008,
+    "p90": 175.906008,
+    "p95": 175.906008,
+    "max": 175.906008,
+    "mean": 175.906008
+  },
+  "latency_end_to_end_s": {
+    "min": 180.393582,
+    "median": 180.393582,
+    "p90": 180.393582,
+    "p95": 180.393582,
+    "max": 180.393582,
+    "mean": 180.393582
+  },
+  "breakdown_s": {
+    "load_s": {
+      "min": 0.074683,
+      "median": 0.074683,
+      "p90": 0.074683,
+      "p95": 0.074683,
+      "max": 0.074683,
+      "mean": 0.074683
+    },
+    "preprocess_s": {
+      "min": 3.973171,
+      "median": 3.973171,
+      "p90": 3.973171,
+      "p95": 3.973171,
+      "max": 3.973171,
+      "mean": 3.973171
+    },
+    "decode_s": {
+      "min": 0.439719,
+      "median": 0.439719,
+      "p90": 0.439719,
+      "p95": 0.439719,
+      "max": 0.439719,
+      "mean": 0.439719
+    }
+  },
+  "rtf_model": {
+    "min": 0.583294,
+    "median": 0.583294,
+    "p90": 0.583294,
+    "p95": 0.583294,
+    "max": 0.583294,
+    "mean": 0.583294
+  },
+  "rtf_end_to_end": {
+    "min": 0.598175,
+    "median": 0.598175,
+    "p90": 0.598175,
+    "p95": 0.598175,
+    "max": 0.598175,
+    "mean": 0.598175
+  },
+  "model_id": "openai/whisper-base",
+  "onnx_dir": "whisper-base-with-past",
+  "language": "en",
+  "task": "transcribe",
+  "max_new_tokens": 128,
+  "notes": {
+    "longform": "processor(truncation=False, padding='longest', return_attention_mask=True) + generate(return_timestamps=True)"
+  }
+}

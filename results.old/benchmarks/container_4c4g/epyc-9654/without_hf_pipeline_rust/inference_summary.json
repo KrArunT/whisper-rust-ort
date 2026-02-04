@@ -1,0 +1,73 @@
+{
+  "breakdown_s": {
+    "decode_s": {
+      "max": 0.000482736,
+      "mean": 0.000482736,
+      "median": 0.000482736,
+      "min": 0.000482736,
+      "p90": 0.000482736,
+      "p95": 0.000482736
+    },
+    "load_s": {
+      "max": 0.2028574,
+      "mean": 0.2028574,
+      "median": 0.2028574,
+      "min": 0.2028574,
+      "p90": 0.2028574,
+      "p95": 0.2028574
+    },
+    "model_only_s": {
+      "max": 14.031795815,
+      "mean": 14.031795815,
+      "median": 14.031795815,
+      "min": 14.031795815,
+      "p90": 14.031795815,
+      "p95": 14.031795815
+    },
+    "preprocess_s": {
+      "max": 0.647183284,
+      "mean": 0.647183284,
+      "median": 0.647183284,
+      "min": 0.647183284,
+      "p90": 0.647183284,
+      "p95": 0.647183284
+    }
+  },
+  "config_used": {
+    "allow_spinning": true,
+    "cpu_mem_arena": true,
+    "execution_mode": "SEQUENTIAL",
+    "graph_opt": "ENABLE_ALL",
+    "inter_op": 1,
+    "intra_op": 1,
+    "mem_pattern": true
+  },
+  "language": "en",
+  "latency_end_to_end_s": {
+    "max": 14.884440201999999,
+    "mean": 14.884440201999999,
+    "median": 14.884440201999999,
+    "min": 14.884440201999999,
+    "p90": 14.884440201999999,
+    "p95": 14.884440201999999
+  },
+  "max_new_tokens": 128,
+  "model_id": "openai/whisper-base",
+  "n_files": 1,
+  "notes": {
+    "longform": "Rust approximation: chunked 30s windows with overlap; greedy decode via decoder_with_past",
+    "token_decode": "Tokenizer decode (skip_special_tokens=true)"
+  },
+  "onnx_dir": "whisper-base-with-past",
+  "rtf_end_to_end": {
+    "max": 0.04935592882663761,
+    "mean": 0.04935592882663761,
+    "median": 0.04935592882663761,
+    "min": 0.04935592882663761,
+    "p90": 0.04935592882663761,
+    "p95": 0.04935592882663761
+  },
+  "task": "transcribe",
+  "timestamps": false,
+  "tokenizer_json": "whisper-base-with-past/tokenizer.json"
+}

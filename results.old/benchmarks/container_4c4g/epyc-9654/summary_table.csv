@@ -1,0 +1,7 @@
+implementation,precision,beam_size,time_s,ram_mb
+openai/whisper (HF pipeline),fp32,1,72.909,1724
+onnxruntime python (no HF pipeline),fp32,1,85.148,1906
+onnxruntime rust (no HF pipeline),fp32,1,14.884,2126
+onnxruntime rust (int8),int8,1,9.131,1206
+faster-whisper (fp32),fp32,1,22.809,1133
+faster-whisper (int8),int8,1,33.968,905

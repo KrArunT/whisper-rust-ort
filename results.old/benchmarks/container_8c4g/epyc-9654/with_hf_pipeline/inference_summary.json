@@ -1,0 +1,32 @@
+{
+  "config_used": {
+    "ORT_INTRA_OP": 8,
+    "ORT_INTER_OP": 1,
+    "num_beams": 1
+  },
+  "n_files": 1,
+  "latency_end_to_end_s": {
+    "min": 172.26037,
+    "median": 172.26037,
+    "p90": 172.26037,
+    "p95": 172.26037,
+    "max": 172.26037,
+    "mean": 172.26037
+  },
+  "rtf_end_to_end": {
+    "min": 0.571205,
+    "median": 0.571205,
+    "p90": 0.571205,
+    "p95": 0.571205,
+    "max": 0.571205,
+    "mean": 0.571205
+  },
+  "model_id": "openai/whisper-base",
+  "onnx_dir": "whisper-base-with-past",
+  "language": "en",
+  "task": "transcribe",
+  "max_new_tokens": 128,
+  "notes": {
+    "pipeline": "HF pipeline with chunk_length_s=30, stride_length_s=(1,1)"
+  }
+}

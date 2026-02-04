@@ -7,11 +7,12 @@ DOCKERFILE="${DOCKERFILE:-Dockerfile.container}"
 CORES_LIST="${CORES_LIST:-4}"
 MEMORY_GB="${MEMORY_GB:-4}"
 CPUSET_START="${CPUSET_START:-0}"
+CPUSET_LIST="${CPUSET_LIST:-}"
 SUT_NAME="${SUT_NAME:-$(hostname -s)}"
 OUT_ROOT="${OUT_ROOT:-results/benchmarks}"
 RESULTS_MD="${RESULTS_MD:-RESULTS.md}"
 RESULTS_CSV="${RESULTS_CSV:-RESULTS.csv}"
-BUILD_IMAGE="${BUILD_IMAGE:-1}"
+BUILD_IMAGE="${BUILD_IMAGE:-0}"
 MERGE_ONLY="${MERGE_ONLY:-0}"
 
 if [[ "${BUILD_IMAGE}" != "0" ]]; then
@@ -77,7 +78,11 @@ if [[ "${MERGE_ONLY}" != "0" ]]; then
 fi
 
 for cores in ${CORES_LIST}; do
-  cpuset="${CPUSET:-$(cpu_range "${cores}" "${CPUSET_START}")}"
+  if [[ -n "${CPUSET_LIST}" ]]; then
+    cpuset="${CPUSET_LIST}"
+  else
+    cpuset="${CPUSET:-$(cpu_range "${cores}" "${CPUSET_START}")}"
+  fi
   if [[ "${cores}" == "4" && "${MEMORY_GB}" == "4" ]]; then
     out_base="${OUT_ROOT}/container_4c4g"
   else
@@ -110,48 +115,17 @@ for cores in ${CORES_LIST}; do
     -e HF_MODEL_ID \
     -e FW_MODEL_ID \
     -e UV_CACHE_DIR \
+    -e ORT_INTRA_OP \
+    -e ORT_INTER_OP \
     "${IMAGE}" \
-    bash -lc "scripts/run_container_4c4g_inner.sh"
+    bash -lc "scripts/run_container_benchmarks_inner.sh"
 
-#   uv run update_results_md.py \
-#     --results-md "${RESULTS_MD}" \
-#     --summary-table "${out_base}/summary_table.md" \
-#     --summary-csv "${out_base}/summary_table.csv" \
-#     --sut-name "${SUT_NAME:-default}" \
-#     --core-count "${cores}" \
-#     --memory-gb "${MEMORY_GB}" \
-#     --results-csv "${RESULTS_CSV}"
-# done
-
-# optional: start fresh
-# rm -f RESULTS.md RESULTS.csv
-
-find results/benchmarks -type f -name summary_table.md -path '*/container_*/*' | while read -r table; do
-  sut_dir="$(dirname "$table")"
-  parent="$(basename "$sut_dir")"
-  if [[ "$parent" == container_* ]]; then
-    sut_name="default"
-    container_name="$parent"
-  else
-    sut_name="$parent"
-    container_name="$(basename "$(dirname "$sut_dir")")"
-  fi
-
-  if [[ "$container_name" =~ ^container_([0-9]+)c([0-9]+)g$ ]]; then
-    cores="${BASH_REMATCH[1]}"
-    mem="${BASH_REMATCH[2]}"
-  else
-    echo "Skip: unexpected path $container_name"
-    continue
-  fi
-
-  summary_csv="${table%.md}.csv"
   uv run update_results_md.py \
-    --results-md RESULTS.md \
-    --summary-table "$table" \
-    --summary-csv "$summary_csv" \
-    --sut-name "$sut_name" \
-    --core-count "$cores" \
-    --memory-gb "$mem" \
-    --results-csv RESULTS.csv
+    --results-md "${RESULTS_MD}" \
+    --summary-table "${out_base}/summary_table.md" \
+    --summary-csv "${out_base}/summary_table.csv" \
+    --sut-name "${SUT_NAME:-default}" \
+    --core-count "${cores}" \
+    --memory-gb "${MEMORY_GB}" \
+    --results-csv "${RESULTS_CSV}"
 done

@@ -1,13 +1,7 @@
 timestamp,sut_name,core_count,memory_gb,implementation,precision,beam_size,time_s,ram_mb
-2026-01-29T18:16:06,epyc-9654,4,4,openai/whisper (HF pipeline),fp32,1,72.909,1724
-2026-01-29T18:16:06,epyc-9654,4,4,onnxruntime python (no HF pipeline),fp32,1,85.148,1906
-2026-01-29T18:16:06,epyc-9654,4,4,onnxruntime rust (no HF pipeline),fp32,1,14.884,2126
-2026-01-29T18:16:06,epyc-9654,4,4,onnxruntime rust (int8),int8,1,9.131,1206
-2026-01-29T18:16:06,epyc-9654,4,4,faster-whisper (fp32),fp32,1,22.809,1133
-2026-01-29T18:16:06,epyc-9654,4,4,faster-whisper (int8),int8,1,33.968,905
-2026-01-29T18:16:06,epyc-9654,8,4,openai/whisper (HF pipeline),fp32,1,172.26,1719
-2026-01-29T18:16:06,epyc-9654,8,4,onnxruntime python (no HF pipeline),fp32,1,180.394,1917
-2026-01-29T18:16:06,epyc-9654,8,4,onnxruntime rust (no HF pipeline),fp32,1,17.094,3210
-2026-01-29T18:16:06,epyc-9654,8,4,onnxruntime rust (int8),int8,1,7.211,1790
-2026-01-29T18:16:06,epyc-9654,8,4,faster-whisper (fp32),fp32,1,20.579,1136
-2026-01-29T18:16:06,epyc-9654,8,4,faster-whisper (int8),int8,1,42.697,908
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,openai/whisper (HF pipeline),fp32,1,76.142,1727
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,onnxruntime python (no HF pipeline),fp32,1,76.799,1893
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,onnxruntime rust (no HF pipeline),fp32,1,13.198,2131
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,onnxruntime rust (int8),int8,1,7.862,1225
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,faster-whisper (fp32),fp32,1,22.262,1128
+2026-02-04T12:19:53,BLR-L-ARTIWARY,4,4,faster-whisper (int8),int8,1,32.311,902

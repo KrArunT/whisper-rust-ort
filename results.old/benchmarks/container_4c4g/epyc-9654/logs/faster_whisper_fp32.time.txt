@@ -1,0 +1,23 @@
+	Command being timed: "uv run python benchmark_faster_whisper.py --model_id Systran/faster-whisper-base --audio_dir audio --language en --task transcribe --max_new_tokens 128 --cpu_threads 4 --num_workers 1 --compute_type float32 --beam_size 1 --best_of 1 --write_txt --out_csv results/benchmarks/container_4c4g/epyc-9654/faster_whisper_fp32/inference_per_file.csv --out_json results/benchmarks/container_4c4g/epyc-9654/faster_whisper_fp32/inference_per_file.json --out_summary_json results/benchmarks/container_4c4g/epyc-9654/faster_whisper_fp32/inference_summary.json"
+	User time (seconds): 158.76
+	System time (seconds): 29.25
+	Percent of CPU this job got: 295%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 1:03.57
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1160568
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 259
+	Minor (reclaiming a frame) page faults: 5340880
+	Voluntary context switches: 22776
+	Involuntary context switches: 4585
+	Swaps: 0
+	File system inputs: 41824
+	File system outputs: 290176
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

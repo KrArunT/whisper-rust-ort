@@ -10,7 +10,7 @@ latency and reproducible comparisons across systems under test (SUTs).
 - `benchmark_with_hf_pipeline.py`: HF pipeline benchmark.
 - `benchmark_without_hf_pipeline.py`: Python no‑HF benchmark.
 - `benchmark_faster_whisper.py`: faster‑whisper benchmark.
-- `run_container_4c4g_compare.sh`: container runner and results updater.
+- `run_container_benchmarks.sh`: container runner and results updater.
 - `update_results_md.py`: append results into `RESULTS.md` and `RESULTS.csv`.
 - `whisper-base-with-past/`: ONNX export + `tokenizer.json`.
 - `audio/`: input samples.
@@ -57,25 +57,25 @@ Outputs land under `results/benchmarks/`.
 Run all benchmarks and write summary tables:
 
 ```bash
-./run_container_4c4g_compare.sh
+./run_container_benchmarks.sh
 ```
 
 Run multiple core counts:
 
 ```bash
-CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh
+CORES_LIST="4 8 16 32 64" ./run_container_benchmarks.sh
 ```
 
 Merge existing summary tables only (no benchmarks):
 
 ```bash
-MERGE_ONLY=1 ./run_container_4c4g_compare.sh
+MERGE_ONLY=1 ./run_container_benchmarks.sh
 ```
 
 Tag results per SUT:
 
 ```bash
-SUT_NAME=epyc-9654 ./run_container_4c4g_compare.sh
+SUT_NAME=epyc-9654 ./run_container_benchmarks.sh
 ```
 
 Outputs:
@@ -90,6 +90,7 @@ Other core counts are written under:
 
 Notes:
 
+- The script exports `openai/whisper-base` to ONNX if missing.
 - The summary table time is end‑to‑end p95 from each `inference_summary.json`.
 - If files are root‑owned after Docker runs:
   ```bash
@@ -97,6 +98,7 @@ Notes:
   ```
 - The container image prebuilds the Rust binary. Use `FORCE_BUILD_RUST=1` to
   rebuild from the mounted workspace.
+- Use `CPUSET_LIST=0-3,8-11` to pin a specific core list (overrides `CPUSET_START`).
 
 ## Results
 

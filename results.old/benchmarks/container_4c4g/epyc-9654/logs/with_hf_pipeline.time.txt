@@ -1,0 +1,31 @@
+Special tokens have been added in the vocabulary, make sure the associated word embeddings are fine-tuned or trained.
+Could not find any ONNX files with standard file name decoder_model_merged.onnx, files found: [PosixPath('encoder_model.onnx'), PosixPath('decoder_model.onnx'), PosixPath('decoder_with_past_model.onnx')]. Please make sure to pass a `file_name` and/or `subfolder` argument to `from_pretrained` when loading an ONNX file with non-standard file names.
+/opt/venv/lib/python3.12/site-packages/transformers/models/whisper/generation_whisper.py:480: FutureWarning: The input name `inputs` is deprecated. Please make sure to use `input_features` instead.
+  warnings.warn(
+Due to a bug fix in https://github.com/huggingface/transformers/pull/28687 transcription using a multilingual Whisper will default to language detection followed by transcription instead of translation to English.This might be a breaking change for your use case. If you want to instead always translate your audio to English, make sure to pass `language='en'`.
+The attention mask is not set and cannot be inferred from input because pad token is same as eos token.As a consequence, you may observe unexpected behavior. Please pass your input's `attention_mask` to obtain reliable results.
+/opt/venv/lib/python3.12/site-packages/transformers/models/whisper/generation_whisper.py:480: FutureWarning: The input name `inputs` is deprecated. Please make sure to use `input_features` instead.
+  warnings.warn(
+	Command being timed: "uv run python benchmark_with_hf_pipeline.py --model_id openai/whisper-base --audio_dir audio --onnx_dir whisper-base-with-past --language en --task transcribe --max_new_tokens 128 --intra_op 4 --inter_op 1 --num_beams 1 --warmup 1 --write_txt --out_csv results/benchmarks/container_4c4g/epyc-9654/with_hf_pipeline/inference_per_file.csv --out_json results/benchmarks/container_4c4g/epyc-9654/with_hf_pipeline/inference_per_file.json --out_summary_json results/benchmarks/container_4c4g/epyc-9654/with_hf_pipeline/inference_summary.json"
+	User time (seconds): 406.65
+	System time (seconds): 21.17
+	Percent of CPU this job got: 239%
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 2:58.87
+	Average shared text size (kbytes): 0
+	Average unshared data size (kbytes): 0
+	Average stack size (kbytes): 0
+	Average total size (kbytes): 0
+	Maximum resident set size (kbytes): 1764940
+	Average resident set size (kbytes): 0
+	Major (requiring I/O) page faults: 1037
+	Minor (reclaiming a frame) page faults: 731206
+	Voluntary context switches: 37481
+	Involuntary context switches: 82522
+	Swaps: 0
+	File system inputs: 160432
+	File system outputs: 103864
+	Socket messages sent: 0
+	Socket messages received: 0
+	Signals delivered: 0
+	Page size (bytes): 4096
+	Exit status: 0

@@ -1,0 +1,33 @@
+{
+  "config_used": {
+    "cpu_threads": 4,
+    "num_workers": 1,
+    "compute_type": "float32",
+    "beam_size": 1,
+    "best_of": 1
+  },
+  "n_files": 1,
+  "latency_end_to_end_s": {
+    "min": 22.808739,
+    "median": 22.808739,
+    "p90": 22.808739,
+    "p95": 22.808739,
+    "max": 22.808739,
+    "mean": 22.808739
+  },
+  "rtf_end_to_end": {
+    "min": 0.075632,
+    "median": 0.075632,
+    "p90": 0.075632,
+    "p95": 0.075632,
+    "max": 0.075632,
+    "mean": 0.075632
+  },
+  "model_id": "Systran/faster-whisper-base",
+  "language": "en",
+  "task": "transcribe",
+  "max_new_tokens": 128,
+  "notes": {
+    "engine": "faster-whisper (CTranslate2)"
+  }
+}

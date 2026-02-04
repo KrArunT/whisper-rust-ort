@@ -1,0 +1,73 @@
+{
+  "breakdown_s": {
+    "decode_s": {
+      "max": 0.000559743,
+      "mean": 0.000559743,
+      "median": 0.000559743,
+      "min": 0.000559743,
+      "p90": 0.000559743,
+      "p95": 0.000559743
+    },
+    "load_s": {
+      "max": 0.048492999,
+      "mean": 0.048492999,
+      "median": 0.048492999,
+      "min": 0.048492999,
+      "p90": 0.048492999,
+      "p95": 0.048492999
+    },
+    "model_only_s": {
+      "max": 8.65831095,
+      "mean": 8.65831095,
+      "median": 8.65831095,
+      "min": 8.65831095,
+      "p90": 8.65831095,
+      "p95": 8.65831095
+    },
+    "preprocess_s": {
+      "max": 0.42281892,
+      "mean": 0.42281892,
+      "median": 0.42281892,
+      "min": 0.42281892,
+      "p90": 0.42281892,
+      "p95": 0.42281892
+    }
+  },
+  "config_used": {
+    "allow_spinning": true,
+    "cpu_mem_arena": true,
+    "execution_mode": "SEQUENTIAL",
+    "graph_opt": "ENABLE_ALL",
+    "inter_op": 1,
+    "intra_op": 1,
+    "mem_pattern": true
+  },
+  "language": "en",
+  "latency_end_to_end_s": {
+    "max": 9.131170268,
+    "mean": 9.131170268,
+    "median": 9.131170268,
+    "min": 9.131170268,
+    "p90": 9.131170268,
+    "p95": 9.131170268
+  },
+  "max_new_tokens": 128,
+  "model_id": "openai/whisper-base",
+  "n_files": 1,
+  "notes": {
+    "longform": "Rust approximation: chunked 30s windows with overlap; greedy decode via decoder_with_past",
+    "token_decode": "Tokenizer decode (skip_special_tokens=true)"
+  },
+  "onnx_dir": "whisper-base-with-past-int8",
+  "rtf_end_to_end": {
+    "max": 0.030278423893346063,
+    "mean": 0.030278423893346063,
+    "median": 0.030278423893346063,
+    "min": 0.030278423893346063,
+    "p90": 0.030278423893346063,
+    "p95": 0.030278423893346063
+  },
+  "task": "transcribe",
+  "timestamps": false,
+  "tokenizer_json": "whisper-base-with-past-int8/tokenizer.json"
+}

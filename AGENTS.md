@@ -11,7 +11,7 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - `compare_container_benchmarks.py`: summarize container runs into a table.
 - `update_results_md.py`: sync summary tables into `RESULTS.md`.
 - Shell runners: `benchmark_without_hf_pipeline.sh`, `run_benchmark_without_hf_pipeline_rust.sh`, `run_all_and_compare.sh`.
-- Container scripts: `Dockerfile.container`, `run_container_4c4g_compare.sh`, `scripts/run_container_4c4g_inner.sh`.
+- Container scripts: `Dockerfile.container`, `run_container_benchmarks.sh`, `scripts/run_container_benchmarks_inner.sh`.
 - Assets: `audio/` input files, `whisper-base-with-past/` ONNX models + tokenizer.
 - Outputs: `results/benchmarks/**`, `results_py/benchmarks/**`, `RESULTS.md`.
 
@@ -24,9 +24,9 @@ This repo benchmarks `openai/whisper-base` on CPU using ONNX Runtime (Rust + Pyt
 - `uv run python benchmark_faster_whisper.py --cpu_threads 8`: run faster‑whisper benchmark.
 - `uv run python compare_end_to_end_latencies.py`: compare end‑to‑end p95 latencies.
 - `./run_all_and_compare.sh`: run all benchmarks + compare.
-- `./run_container_4c4g_compare.sh`: run container benchmarks (4 cores/4GB) + generate summary table.
-- `CORES_LIST="4 8 16 32 64" ./run_container_4c4g_compare.sh`: run multiple core counts.
-- `MERGE_ONLY=1 ./run_container_4c4g_compare.sh`: merge existing summary tables into results.
+- `./run_container_benchmarks.sh`: run container benchmarks (4 cores/4GB) + generate summary table.
+- `CORES_LIST="4 8 16 32 64" ./run_container_benchmarks.sh`: run multiple core counts.
+- `MERGE_ONLY=1 ./run_container_benchmarks.sh`: merge existing summary tables into results.
 
 ## Coding Style & Naming Conventions
 - Python: 4‑space indentation, snake_case functions/files, UPPER_CASE constants.
