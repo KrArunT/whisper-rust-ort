@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Dict, List
 
 import onnxruntime as ort
+from onnx import TensorProto
 from onnxruntime.quantization import QuantType, quantize_dynamic
 
 from optimum.onnxruntime import ORTModelForSpeechSeq2Seq
@@ -82,6 +83,7 @@ def quantize_models(src: Path, dst: Path) -> None:
             model_output=str(out_path),
             weight_type=QuantType.QInt8,
             op_types_to_quantize=["MatMul", "Gemm"],
+            extra_options={"DefaultTensorType": TensorProto.FLOAT},
         )
 
 
@@ -108,15 +110,16 @@ def main() -> None:
         if level not in {"o1", "o2", "o3", "o4"}:
             raise ValueError(f"Unsupported opt level: {level}")
 
-        opt_dir = out_root / f"{level}"
-        optimize_models(onnx_dir, opt_dir, level)
-        copy_configs(onnx_dir, opt_dir)
+        fp32_dir = out_root / f"{level}_fp32"
+        optimize_models(onnx_dir, fp32_dir, level)
+        copy_configs(onnx_dir, fp32_dir)
         write_metadata(
-            opt_dir,
+            fp32_dir,
             {
                 "opt_level": level,
                 "graph_optimization_level": ort_opt_level(level).name,
                 "note": "o4 maps to ORT_ENABLE_ALL",
+                "precision": "fp32",
                 "isa_target": "baseline",
             },
         )
@@ -124,7 +127,7 @@ def main() -> None:
         if args.quantize:
             for isa in isas:
                 int8_dir = out_root / f"{level}_int8_{isa}"
-                quantize_models(opt_dir, int8_dir)
+                quantize_models(fp32_dir, int8_dir)
                 copy_configs(onnx_dir, int8_dir)
                 write_metadata(
                     int8_dir,
@@ -132,6 +135,7 @@ def main() -> None:
                         "opt_level": level,
                         "graph_optimization_level": ort_opt_level(level).name,
                         "note": "o4 maps to ORT_ENABLE_ALL; ISA is a label only (depends on ORT build/CPU)",
+                        "precision": "int8",
                         "isa_target": isa,
                         "quantization": "dynamic_int8_matmul_gemm",
                     },

@@ -107,7 +107,7 @@ Notes:
 
 ## Model optimization (ONNX)
 
-Generate optimized Whisper ONNX variants (O1–O4) and INT8 copies tagged by ISA:
+Generate optimized Whisper ONNX variants (O1–O4) for FP32 and INT8 copies tagged by ISA:
 
 ```bash
 uv run python scripts/optimize_onnx_whisper.py \
@@ -120,6 +120,7 @@ uv run python scripts/optimize_onnx_whisper.py \
 ```
 
 Notes:
+- FP32 outputs are written as `o1_fp32`, `o2_fp32`, `o3_fp32`, `o4_fp32`.
 - `o4` maps to ORT `ENABLE_ALL`.
 - ISA labels are metadata only; actual kernel selection depends on your ORT build
   and CPU capabilities.
