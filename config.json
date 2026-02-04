@@ -1,0 +1,9 @@
+{
+  "intra_op": 4,
+  "inter_op": 1,
+  "execution_mode": "SEQUENTIAL",
+  "graph_opt": "ENABLE_ALL",
+  "cpu_mem_arena": true,
+  "mem_pattern": true,
+  "allow_spinning": true
+}

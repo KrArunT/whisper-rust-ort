@@ -104,3 +104,22 @@ Notes:
 
 - `RESULTS.md` is appended per run (per SUT/core/memory).
 - `RESULTS.csv` aggregates rows across runs with timestamp, SUT, cores, memory.
+
+## Model optimization (ONNX)
+
+Generate optimized Whisper ONNX variants (O1–O4) and INT8 copies tagged by ISA:
+
+```bash
+uv run python scripts/optimize_onnx_whisper.py \
+  --export_onnx \
+  --quantize \
+  --opt_levels o1,o2,o3,o4 \
+  --isas avx2,avx512,vnni \
+  --onnx_dir whisper-base-with-past \
+  --out_dir models/whisper-base-optimized
+```
+
+Notes:
+- `o4` maps to ORT `ENABLE_ALL`.
+- ISA labels are metadata only; actual kernel selection depends on your ORT build
+  and CPU capabilities.
