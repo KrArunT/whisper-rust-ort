@@ -16,3 +16,4 @@ __pycache__/
 # OS
 .DS_Store
 test_rust_bin/
+models/
