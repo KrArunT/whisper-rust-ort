@@ -128,6 +128,7 @@ run_timed "without_hf_pipeline_rust" \
   --language "${LANGUAGE}" \
   --task "${TASK}" \
   --max-new-tokens "${MAX_NEW_TOKENS}" \
+  --num-beams "${NUM_BEAMS}" \
   --intra-op "${ORT_INTRA_OP}" \
   --inter-op "${ORT_INTER_OP}" \
   --chunk-parallelism "${CORE_COUNT}" \
@@ -144,6 +145,7 @@ run_timed "without_hf_pipeline_rust_int8" \
   --language "${LANGUAGE}" \
   --task "${TASK}" \
   --max-new-tokens "${MAX_NEW_TOKENS}" \
+  --num-beams "${NUM_BEAMS}" \
   --intra-op "${ORT_INTRA_OP}" \
   --inter-op "${ORT_INTER_OP}" \
   --chunk-parallelism "${CORE_COUNT}" \

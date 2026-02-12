@@ -46,9 +46,12 @@ cargo run --release -- \
   --language en \
   --task transcribe \
   --max-new-tokens 128 \
+  --num-beams 1 \
   --warmup 1 \
   --write-txt
 ```
+
+Set `--num-beams > 1` to use beam search in Rust decoding.
 
 Outputs land under `results/benchmarks/`.
 

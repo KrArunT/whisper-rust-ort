@@ -41,6 +41,9 @@ struct Args {
     #[arg(long, default_value_t = 128)]
     max_new_tokens: usize,
 
+    #[arg(long, default_value_t = 1)]
+    num_beams: usize,
+
     #[arg(long, default_value_t = 0)]
     warmup: usize,
 
@@ -734,6 +737,53 @@ fn argmax_last_dim_raw(shape: &[i64], data: &[f32], suppress: Option<&HashSet<i6
     Ok(best_i as i64)
 }
 
+fn topk_logprobs_last_dim_raw(
+    shape: &[i64],
+    data: &[f32],
+    k: usize,
+    suppress: Option<&HashSet<i64>>,
+) -> Result<Vec<(i64, f64)>> {
+    if shape.len() < 2 {
+        bail!("Unexpected logits shape: {:?}", shape);
+    }
+    let vocab_dim = *shape.last().unwrap() as usize;
+    if vocab_dim == 0 || data.len() < vocab_dim {
+        bail!("Invalid logits shape/data: vocab_dim={vocab_dim}, len={}", data.len());
+    }
+
+    let rows = data.len() / vocab_dim;
+    let row_start = (rows - 1) * vocab_dim;
+    let row = &data[row_start..row_start + vocab_dim];
+
+    let mut candidates: Vec<(usize, f32)> = row
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| suppress.map(|s| !s.contains(&(*i as i64))).unwrap_or(true))
+        .map(|(i, &v)| (i, v))
+        .collect();
+    if candidates.is_empty() {
+        bail!("All logits were suppressed");
+    }
+
+    let max_logit = candidates
+        .iter()
+        .map(|(_, v)| *v)
+        .fold(f32::NEG_INFINITY, f32::max);
+    let sum_exp: f64 = candidates
+        .iter()
+        .map(|(_, v)| ((*v - max_logit).exp()) as f64)
+        .sum();
+    let log_denom = (max_logit as f64) + sum_exp.ln();
+
+    candidates.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let take_n = k.max(1).min(candidates.len());
+    Ok(candidates
+        .into_iter()
+        .take(take_n)
+        .map(|(i, v)| (i as i64, (v as f64) - log_denom))
+        .collect())
+}
+
 fn insert_present_as_past(
     outputs: &mut ort::SessionOutputs<'_, '_>,
     target: &mut HashMap<String, Value>,
@@ -828,6 +878,139 @@ fn greedy_decode_with_past(
     Ok(tokens)
 }
 
+fn beam_search_decode(
+    decoder: &Session,
+    encoder_hidden_states: &ArrayD<f32>,
+    prompt_ids: &[i64],
+    max_new_tokens: usize,
+    num_beams: usize,
+    eot: i64,
+    gen_cfg: &GenerationCfg,
+) -> Result<Vec<i64>> {
+    #[derive(Clone)]
+    struct BeamHyp {
+        tokens: Vec<i64>,
+        score: f64,
+        finished: bool,
+    }
+
+    let k = num_beams.max(1);
+    if k == 1 {
+        bail!("beam_search_decode called with num_beams=1");
+    }
+
+    let enc_val = Value::from_array(encoder_hidden_states.to_owned())?;
+    let base_suppress: HashSet<i64> = gen_cfg
+        .suppress_tokens
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let begin_suppress: HashSet<i64> = gen_cfg
+        .begin_suppress_tokens
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let mut suppress_first = base_suppress.clone();
+    suppress_first.extend(begin_suppress.iter());
+
+    let mut beams = vec![BeamHyp {
+        tokens: prompt_ids.to_vec(),
+        score: 0.0,
+        finished: false,
+    }];
+
+    for step in 0..max_new_tokens {
+        let suppress = if step == 0 {
+            Some(&suppress_first)
+        } else {
+            Some(&base_suppress)
+        };
+        let mut next_beams: Vec<BeamHyp> = Vec::new();
+
+        for beam in &beams {
+            if beam.finished {
+                next_beams.push(beam.clone());
+                continue;
+            }
+
+            let input_ids = Array2::<i64>::from_shape_vec((1, beam.tokens.len()), beam.tokens.clone())?;
+            let input_ids_val = Value::from_array(input_ids)?;
+            let outputs = decoder.run(vec![
+                ("input_ids", SessionInputValue::from(input_ids_val)),
+                ("encoder_hidden_states", SessionInputValue::from(enc_val.view())),
+            ])?;
+
+            let (shape, data) = outputs[0].try_extract_raw_tensor::<f32>()?;
+            let topk = topk_logprobs_last_dim_raw(&shape, data, k, suppress)?;
+            for (tok, logp) in topk {
+                let mut new_tokens = beam.tokens.clone();
+                new_tokens.push(tok);
+                next_beams.push(BeamHyp {
+                    tokens: new_tokens,
+                    score: beam.score + logp,
+                    finished: tok == eot,
+                });
+            }
+        }
+
+        next_beams.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        next_beams.truncate(k);
+        if next_beams.is_empty() {
+            bail!("Beam search produced no candidates");
+        }
+        let all_finished = next_beams.iter().all(|b| b.finished);
+        beams = next_beams;
+        if all_finished {
+            break;
+        }
+    }
+
+    let best = beams
+        .into_iter()
+        .max_by(|a, b| a.score.partial_cmp(&b.score).unwrap_or(std::cmp::Ordering::Equal))
+        .ok_or_else(|| anyhow!("No beam hypothesis produced"))?;
+    Ok(best.tokens)
+}
+
+fn decode_with_strategy(
+    decoder: &Session,
+    decoder_with_past: &Session,
+    encoder_hidden_states: &ArrayD<f32>,
+    prompt_ids: &[i64],
+    max_new_tokens: usize,
+    num_beams: usize,
+    eot: i64,
+    gen_cfg: &GenerationCfg,
+) -> Result<Vec<i64>> {
+    if num_beams <= 1 {
+        greedy_decode_with_past(
+            decoder,
+            decoder_with_past,
+            encoder_hidden_states,
+            prompt_ids,
+            max_new_tokens,
+            eot,
+            gen_cfg,
+        )
+    } else {
+        beam_search_decode(
+            decoder,
+            encoder_hidden_states,
+            prompt_ids,
+            max_new_tokens,
+            num_beams,
+            eot,
+            gen_cfg,
+        )
+    }
+}
+
 // -------------------------
 // Chunked “long-form” transcription (Rust approximation)
 // -------------------------
@@ -839,6 +1022,7 @@ fn transcribe_longform_chunked(
     language: &str,
     task: &str,
     max_new_tokens: usize,
+    num_beams: usize,
     chunk_length_s: f32,
     overlap_s: f32,
     tokenizer: Option<&Tokenizer>,
@@ -904,12 +1088,13 @@ fn transcribe_longform_chunked(
                     }
                     let input_features = mel.insert_axis(Axis(0));
                     let enc = run_encoder(encoder, input_features)?;
-                    let tokens = greedy_decode_with_past(
+                    let tokens = decode_with_strategy(
                         decoder,
                         decoder_with_past,
                         &enc,
                         &prompt,
                         max_new_tokens,
+                        num_beams,
                         special.eot,
                         gen_cfg,
                     )?;
@@ -963,7 +1148,16 @@ fn transcribe_longform_chunked(
             // Model: encoder + decoder
             let tm0 = Instant::now();
             let enc = run_encoder(encoder, input_features)?;
-            let tokens = greedy_decode_with_past(decoder, decoder_with_past, &enc, &prompt, max_new_tokens, special.eot, gen_cfg)?;
+            let tokens = decode_with_strategy(
+                decoder,
+                decoder_with_past,
+                &enc,
+                &prompt,
+                max_new_tokens,
+                num_beams,
+                special.eot,
+                gen_cfg,
+            )?;
             model_total += tm0.elapsed().as_secs_f64();
 
             // Decode: use tokenizer if available, otherwise output token IDs.
@@ -1141,6 +1335,7 @@ fn main() -> Result<()> {
                 &args.language,
                 &args.task,
                 args.max_new_tokens,
+                args.num_beams,
                 args.chunk_length_s,
                 args.overlap_s,
                 tokenizer.as_ref().map(|t| &t.0),
@@ -1179,6 +1374,7 @@ fn main() -> Result<()> {
             &args.language,
             &args.task,
             args.max_new_tokens,
+            args.num_beams,
             args.chunk_length_s,
             args.overlap_s,
             tokenizer.as_ref().map(|t| &t.0),
@@ -1233,7 +1429,16 @@ fn main() -> Result<()> {
 
     // Summary
     let summary = serde_json::json!({
-        "config_used": cfg,
+        "config_used": {
+            "intra_op": cfg.intra_op,
+            "inter_op": cfg.inter_op,
+            "execution_mode": cfg.execution_mode,
+            "graph_opt": cfg.graph_opt,
+            "cpu_mem_arena": cfg.cpu_mem_arena,
+            "mem_pattern": cfg.mem_pattern,
+            "allow_spinning": cfg.allow_spinning,
+            "num_beams": args.num_beams
+        },
         "n_files": rows.len(),
         "latency_end_to_end_s": stat_block(&end2end_list),
         "breakdown_s": {
@@ -1248,10 +1453,15 @@ fn main() -> Result<()> {
         "language": args.language,
         "task": args.task,
         "max_new_tokens": args.max_new_tokens,
+        "num_beams": args.num_beams,
         "tokenizer_json": tokenizer.as_ref().map(|t| t.1.display().to_string()).unwrap_or_else(|| "".to_string()),
         "timestamps": args.timestamps,
         "notes": {
-            "longform": "Rust approximation: chunked 30s windows with overlap; greedy decode via decoder_with_past",
+            "longform": if args.num_beams > 1 {
+                "Rust approximation: chunked 30s windows with overlap; beam search decode via decoder"
+            } else {
+                "Rust approximation: chunked 30s windows with overlap; greedy decode via decoder_with_past"
+            },
             "token_decode": if tokenizer.is_some() { "Tokenizer decode (skip_special_tokens=true)" } else { "Prints token IDs unless you provide tokenizer.json." }
         }
     });
