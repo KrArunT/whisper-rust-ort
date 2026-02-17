@@ -12,6 +12,9 @@ RESULTS_ROOT="${RESULTS_ROOT:-results/benchmarks/without_hf_pipeline_rust}"
 NUMA_NODE="${NUMA_NODE:-auto}"
 PIN_STRATEGY="${PIN_STRATEGY:-ccd}"   # ccd | numa | flat
 MAX_CORES_PER_RUN="${MAX_CORES_PER_RUN:-8}"
+ENABLE_TASKSET_PINNING="${ENABLE_TASKSET_PINNING:-1}"  # 1 | 0
+PIN_CCDS="${PIN_CCDS:-}"        # e.g. "0" or "0,1" (L3/CCD ids)
+PIN_CPUS="${PIN_CPUS:-}"        # explicit cpu list, e.g. "0-7,16-23" (overrides strategy)
 NUM_BEAMS="${NUM_BEAMS:-1}"
 
 # Whisper baseline settings
@@ -102,6 +105,176 @@ backup_old_results() {
   fi
 }
 
+expand_number_list() {
+  local spec="${1//[[:space:]]/}"
+  local part start end
+  [[ -z "$spec" ]] && return 0
+  IFS=',' read -r -a parts <<< "$spec"
+  for part in "${parts[@]}"; do
+    [[ -z "$part" ]] && continue
+    if [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+      start="${BASH_REMATCH[1]}"
+      end="${BASH_REMATCH[2]}"
+      if (( start <= end )); then
+        seq "$start" "$end"
+      else
+        seq "$end" "$start"
+      fi
+    elif [[ "$part" =~ ^[0-9]+$ ]]; then
+      echo "$part"
+    fi
+  done
+}
+
+get_online_cpus() {
+  if [[ -r /sys/devices/system/cpu/online ]]; then
+    expand_number_list "$(cat /sys/devices/system/cpu/online)" | sort -n -u
+  else
+    seq 0 $(( $(nproc) - 1 ))
+  fi
+}
+
+build_numa_cpu_candidates() {
+  local out_file="$1"
+  local lscpu_file="$TMP_DIR/lscpu_cpu_node.csv"
+  local target_node="${NUMA_NODE}"
+
+  if ! lscpu -p=CPU,NODE > "$lscpu_file" 2>/dev/null; then
+    return 1
+  fi
+
+  if [[ "$target_node" == "auto" ]]; then
+    target_node="$(awk -F, '$1 !~ /^#/ && $2 >= 0 {print $2; exit}' "$lscpu_file")"
+  fi
+  [[ -z "$target_node" ]] && return 1
+
+  awk -F, -v n="$target_node" '$1 !~ /^#/ && $2 == n {print $1}' "$lscpu_file" | sort -n -u > "$out_file"
+  [[ -s "$out_file" ]]
+}
+
+build_ccd_cpu_candidates() {
+  local out_file="$1"
+  local map_file="$TMP_DIR/cpu_l3_map.txt"
+  local ccd_ids_file="$TMP_DIR/ccd_ids.txt"
+  local selected_ccd_file="$TMP_DIR/selected_ccd_ids.txt"
+
+  : > "$map_file"
+  while IFS= read -r cpu; do
+    local l3_file="/sys/devices/system/cpu/cpu${cpu}/cache/index3/id"
+    if [[ -r "$l3_file" ]]; then
+      local l3_id
+      l3_id="$(cat "$l3_file" 2>/dev/null || true)"
+      [[ -n "$l3_id" ]] && echo "$l3_id $cpu" >> "$map_file"
+    fi
+  done < <(get_online_cpus)
+
+  [[ -s "$map_file" ]] || return 1
+
+  awk '{print $1}' "$map_file" | sort -n -u > "$ccd_ids_file"
+  [[ -s "$ccd_ids_file" ]] || return 1
+
+  if [[ -n "$PIN_CCDS" ]]; then
+    expand_number_list "$PIN_CCDS" | sort -n -u > "$selected_ccd_file"
+  else
+    cp "$ccd_ids_file" "$selected_ccd_file"
+  fi
+  [[ -s "$selected_ccd_file" ]] || return 1
+
+  : > "$out_file"
+  while IFS= read -r ccd_id; do
+    awk -v c="$ccd_id" '$1 == c {print $2}' "$map_file" | sort -n -u >> "$out_file"
+  done < "$selected_ccd_file"
+
+  [[ -s "$out_file" ]]
+}
+
+filter_and_limit_cpus() {
+  local online_file="$1"
+  local candidates_file="$2"
+  local out_file="$3"
+  local max_cores="$4"
+
+  awk -v max="$max_cores" '
+    FNR==NR { online[$1]=1; next }
+    online[$1] && !seen[$1] {
+      print $1
+      seen[$1]=1
+      n++
+      if (max > 0 && n >= max) exit
+    }
+  ' "$online_file" "$candidates_file" > "$out_file"
+}
+
+prepare_taskset_pinning() {
+  local online_file="$TMP_DIR/online_cpus.txt"
+  local candidates_file="$TMP_DIR/pin_candidates.txt"
+  local selected_file="$TMP_DIR/pin_selected.txt"
+  local strategy="${PIN_STRATEGY}"
+  local pin_desc=""
+
+  TASKSET_CPU_LIST=""
+  PINNING_DESC="disabled"
+
+  if [[ "$ENABLE_TASKSET_PINNING" != "1" ]]; then
+    echo "📌 CPU pinning disabled (ENABLE_TASKSET_PINNING=$ENABLE_TASKSET_PINNING)"
+    return 0
+  fi
+  if ! command -v taskset >/dev/null 2>&1; then
+    echo "⚠️  'taskset' not found; running without CPU pinning."
+    return 0
+  fi
+
+  get_online_cpus > "$online_file"
+  if [[ ! -s "$online_file" ]]; then
+    echo "⚠️  Could not detect online CPUs; running without CPU pinning."
+    return 0
+  fi
+
+  if [[ -n "$PIN_CPUS" ]]; then
+    expand_number_list "$PIN_CPUS" | sort -n -u > "$candidates_file"
+    pin_desc="explicit(PIN_CPUS=$PIN_CPUS)"
+  else
+    case "$strategy" in
+      ccd)
+        if build_ccd_cpu_candidates "$candidates_file"; then
+          if [[ -n "$PIN_CCDS" ]]; then
+            pin_desc="ccd(PIN_CCDS=$PIN_CCDS)"
+          else
+            pin_desc="ccd(auto)"
+          fi
+        else
+          echo "⚠️  Could not build CCD-aware CPU set; falling back to flat."
+          cat "$online_file" > "$candidates_file"
+          pin_desc="flat(fallback)"
+        fi
+        ;;
+      numa)
+        if build_numa_cpu_candidates "$candidates_file"; then
+          pin_desc="numa(node=$NUMA_NODE)"
+        else
+          echo "⚠️  Could not build NUMA CPU set; falling back to flat."
+          cat "$online_file" > "$candidates_file"
+          pin_desc="flat(fallback)"
+        fi
+        ;;
+      flat|*)
+        cat "$online_file" > "$candidates_file"
+        pin_desc="flat"
+        ;;
+    esac
+  fi
+
+  filter_and_limit_cpus "$online_file" "$candidates_file" "$selected_file" "$MAX_CORES_PER_RUN"
+  if [[ ! -s "$selected_file" ]]; then
+    echo "⚠️  Selected CPU set is empty; running without CPU pinning."
+    return 0
+  fi
+
+  TASKSET_CPU_LIST="$(paste -sd, "$selected_file")"
+  PINNING_DESC="$pin_desc cores=${MAX_CORES_PER_RUN} cpus=${TASKSET_CPU_LIST}"
+  echo "📌 CPU pinning enabled: $PINNING_DESC"
+}
+
 ##################################################
 # Setup
 ##################################################
@@ -121,6 +294,9 @@ BASELINE_ALL_TXT="$BASELINE_DIR/baseline_all.txt"
 backup_old_results
 mkdir -p "$BASELINE_DIR"
 mkdir -p "$PER_MODEL_RESULTS_DIR"
+
+# Build taskset pinning plan once for all model runs.
+prepare_taskset_pinning
 
 ##################################################
 # Python helpers (baseline + metrics)
@@ -351,7 +527,11 @@ for onnx_dir in "$MODELS_ROOT"/*; do
   [[ -d "$onnx_dir" ]] || continue
   model_name="$(basename "$onnx_dir")"
 
-  echo "🚀 Benchmarking $model_name"
+  if [[ -n "$TASKSET_CPU_LIST" ]]; then
+    echo "🚀 Benchmarking $model_name (pinned: $TASKSET_CPU_LIST)"
+  else
+    echo "🚀 Benchmarking $model_name"
+  fi
 
   TIME_LOG="$TMP_DIR/time_${model_name}.txt"
   HYP_CLEAN="$TMP_DIR/hyp_clean_${model_name}.txt"
@@ -363,24 +543,42 @@ for onnx_dir in "$MODELS_ROOT"/*; do
   mkdir -p "$MODEL_TMP_DIR"
 
   # Run Rust benchmark and persist per-file transcripts into CSV.
-  /usr/bin/time -v -o "$TIME_LOG" \
-    bash -c '
-      set -euo pipefail
+  if [[ -n "$TASKSET_CPU_LIST" ]]; then
+    /usr/bin/time -v -o "$TIME_LOG" \
+      taskset -c "$TASKSET_CPU_LIST" \
       cargo run --release -- \
-        --audio-dir "'"$AUDIO_DIR"'" \
-        --onnx-dir "'"$onnx_dir"'" \
+        --audio-dir "$AUDIO_DIR" \
+        --onnx-dir "$onnx_dir" \
         --language en \
         --task transcribe \
         --max-new-tokens 128 \
-        --num-beams "'"$NUM_BEAMS"'" \
+        --num-beams "$NUM_BEAMS" \
         --intra-op 1 \
         --inter-op 1 \
         --chunk-parallelism 8 \
         --warmup 1 \
-        --out-csv "'"$MODEL_CSV"'" \
-        --out-json "'"$MODEL_JSON"'" \
-        --out-summary-json "'"$MODEL_SUMMARY"'"
-    ' 1>/dev/null 2> "$RUN_ERR"
+        --out-csv "$MODEL_CSV" \
+        --out-json "$MODEL_JSON" \
+        --out-summary-json "$MODEL_SUMMARY" \
+      1>/dev/null 2> "$RUN_ERR"
+  else
+    /usr/bin/time -v -o "$TIME_LOG" \
+      cargo run --release -- \
+        --audio-dir "$AUDIO_DIR" \
+        --onnx-dir "$onnx_dir" \
+        --language en \
+        --task transcribe \
+        --max-new-tokens 128 \
+        --num-beams "$NUM_BEAMS" \
+        --intra-op 1 \
+        --inter-op 1 \
+        --chunk-parallelism 8 \
+        --warmup 1 \
+        --out-csv "$MODEL_CSV" \
+        --out-json "$MODEL_JSON" \
+        --out-summary-json "$MODEL_SUMMARY" \
+      1>/dev/null 2> "$RUN_ERR"
+  fi
 
   RAW_TIME=$(grep "Elapsed (wall clock) time" "$TIME_LOG" | awk '{print $NF}')
   TIME_SEC=$(time_to_seconds "$RAW_TIME")
@@ -426,6 +624,7 @@ BEST_CER=$(tail -n +2 "$MERGED_MODEL_CSV" | awk -F, '$9!="NA"{print}' | sort -t,
 echo "# ⚡ Whisper ONNX Inference Benchmark"
 echo
 echo "**Baseline (accuracy reference):** OpenAI Whisper \`$BASELINE_MODEL\` via python \`whisper\` library"
+echo "**CPU pinning:** \`$PINNING_DESC\`"
 echo
 echo "| Implementation | Precision | Optimization | Instruction Set | Beam size | Time | RAM Usage | WER | CER |"
 echo "|---------------|-----------|--------------|-----------------|-----------|------|-----------|-----|-----|"
@@ -474,3 +673,4 @@ echo "✅ Benchmark completed"
 echo "📄 CSV   : $MERGED_MODEL_CSV"
 echo "📄 Report: $REPORT_MD"
 echo "📁 Baseline transcripts: $BASELINE_DIR"
+echo "📌 Pinning: $PINNING_DESC"
