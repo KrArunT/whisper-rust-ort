@@ -63,6 +63,45 @@ implementation_name() {
   echo "onnxruntime rust"
 }
 
+instruction_set_from_model() {
+  local name="$1"
+  if [[ "$name" =~ _int8_([^_]+)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+  else
+    echo ""
+  fi
+}
+
+backup_old_results() {
+  local ts backup_dir copied=0
+  ts="$(date +%Y%m%d_%H%M%S)"
+  backup_dir="$RESULTS_ROOT/backups/$ts"
+  mkdir -p "$backup_dir"
+
+  if [[ -f "$MERGED_MODEL_CSV" ]]; then
+    cp -a "$MERGED_MODEL_CSV" "$backup_dir/"
+    copied=1
+  fi
+  if [[ -f "$REPORT_MD" ]]; then
+    cp -a "$REPORT_MD" "$backup_dir/"
+    copied=1
+  fi
+  if [[ -d "$PER_MODEL_RESULTS_DIR" ]]; then
+    cp -a "$PER_MODEL_RESULTS_DIR" "$backup_dir/"
+    copied=1
+  fi
+  if [[ -d "$BASELINE_DIR" ]]; then
+    cp -a "$BASELINE_DIR" "$backup_dir/"
+    copied=1
+  fi
+
+  if [[ "$copied" -eq 1 ]]; then
+    echo "💾 Backed up previous benchmark results to: $backup_dir"
+  else
+    rmdir "$backup_dir" 2>/dev/null || true
+  fi
+}
+
 ##################################################
 # Setup
 ##################################################
@@ -73,10 +112,15 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 
 MERGED_MODEL_CSV="$RESULTS_ROOT/merged_inference_results.csv"
 REPORT_MD="$RESULTS_ROOT/BENCHMARK_REPORT.md"
+PER_MODEL_RESULTS_DIR="$RESULTS_ROOT/per_model"
 
 BASELINE_DIR="$RESULTS_ROOT/baseline_whisper_${BASELINE_MODEL}"
-mkdir -p "$BASELINE_DIR"
 BASELINE_ALL_TXT="$BASELINE_DIR/baseline_all.txt"
+
+# Preserve previous run outputs before creating new ones.
+backup_old_results
+mkdir -p "$BASELINE_DIR"
+mkdir -p "$PER_MODEL_RESULTS_DIR"
 
 ##################################################
 # Python helpers (baseline + metrics)
@@ -283,7 +327,7 @@ PY
 # CSV init
 ##################################################
 
-echo "implementation,precision,optimization,beam_size,time_sec,ram_mb,wer,cer" \
+echo "implementation,precision,optimization,instruction_set,beam_size,time_sec,ram_mb,wer,cer" \
   > "$MERGED_MODEL_CSV"
 
 ##################################################
@@ -312,7 +356,7 @@ for onnx_dir in "$MODELS_ROOT"/*; do
   TIME_LOG="$TMP_DIR/time_${model_name}.txt"
   HYP_CLEAN="$TMP_DIR/hyp_clean_${model_name}.txt"
   RUN_ERR="$TMP_DIR/run_stderr_${model_name}.txt"
-  MODEL_TMP_DIR="$TMP_DIR/model_${model_name}"
+  MODEL_TMP_DIR="$PER_MODEL_RESULTS_DIR/$model_name"
   MODEL_CSV="$MODEL_TMP_DIR/inference_per_file.csv"
   MODEL_JSON="$MODEL_TMP_DIR/inference_per_file.json"
   MODEL_SUMMARY="$MODEL_TMP_DIR/inference_summary.json"
@@ -346,6 +390,7 @@ for onnx_dir in "$MODELS_ROOT"/*; do
 
   PRECISION=$(precision_from_model "$model_name")
   OPT_LABEL=$(optimization_from_model "$model_name")
+  ISA_LABEL=$(instruction_set_from_model "$model_name")
   IMPL=$(implementation_name)
 
   # Compute WER/CER vs baseline using Rust benchmark CSV transcription field.
@@ -358,7 +403,7 @@ for onnx_dir in "$MODELS_ROOT"/*; do
     CER="$(cut -d, -f2 <<<"$METRICS")"
   fi
 
-  echo "$IMPL,$PRECISION,$OPT_LABEL,$NUM_BEAMS,$TIME_SEC,$PEAK_MB,$WER,$CER" \
+  echo "$IMPL,$PRECISION,$OPT_LABEL,$ISA_LABEL,$NUM_BEAMS,$TIME_SEC,$PEAK_MB,$WER,$CER" \
     >> "$MERGED_MODEL_CSV"
 done
 
@@ -366,12 +411,12 @@ done
 # Best models (Latency / Memory / Accuracy)
 ##################################################
 
-BEST_LATENCY=$(tail -n +2 "$MERGED_MODEL_CSV" | sort -t, -k5 -n | head -n1)
-BEST_MEMORY=$(tail -n +2 "$MERGED_MODEL_CSV" | sort -t, -k6 -n | head -n1)
+BEST_LATENCY=$(tail -n +2 "$MERGED_MODEL_CSV" | sort -t, -k6 -n | head -n1)
+BEST_MEMORY=$(tail -n +2 "$MERGED_MODEL_CSV" | sort -t, -k7 -n | head -n1)
 
 # Best accuracy = lowest WER (ignore NA)
-BEST_WER=$(tail -n +2 "$MERGED_MODEL_CSV" | awk -F, '$7!="NA"{print}' | sort -t, -k7 -n | head -n1)
-BEST_CER=$(tail -n +2 "$MERGED_MODEL_CSV" | awk -F, '$8!="NA"{print}' | sort -t, -k8 -n | head -n1)
+BEST_WER=$(tail -n +2 "$MERGED_MODEL_CSV" | awk -F, '$8!="NA"{print}' | sort -t, -k8 -n | head -n1)
+BEST_CER=$(tail -n +2 "$MERGED_MODEL_CSV" | awk -F, '$9!="NA"{print}' | sort -t, -k9 -n | head -n1)
 
 ##################################################
 # Markdown Report (comparison-table style)
@@ -382,38 +427,40 @@ echo "# ⚡ Whisper ONNX Inference Benchmark"
 echo
 echo "**Baseline (accuracy reference):** OpenAI Whisper \`$BASELINE_MODEL\` via python \`whisper\` library"
 echo
-echo "| Implementation | Precision | Optimization | Beam size | Time | RAM Usage | WER | CER |"
-echo "|---------------|-----------|--------------|-----------|------|-----------|-----|-----|"
+echo "| Implementation | Precision | Optimization | Instruction Set | Beam size | Time | RAM Usage | WER | CER |"
+echo "|---------------|-----------|--------------|-----------------|-----------|------|-----------|-----|-----|"
 
 tail -n +2 "$MERGED_MODEL_CSV" | \
-while IFS=, read -r impl prec opt beam t ram wer cer; do
-  printf "| %s | %s | %s | %s | %s | %sMB | %s | %s |\n" \
-    "$impl" "$prec" "$opt" "$beam" "$(pretty_time "$t")" "$ram" "$(pretty_score "$wer")" "$(pretty_score "$cer")"
+while IFS=, read -r impl prec opt isa beam t ram wer cer; do
+  printf "| %s | %s | %s | %s | %s | %s | %sMB | %s | %s |\n" \
+    "$impl" "$prec" "$opt" "$isa" "$beam" "$(pretty_time "$t")" "$ram" "$(pretty_score "$wer")" "$(pretty_score "$cer")"
 done
 
 echo
 echo "## 🏎 Lowest Latency"
 echo "- **$(cut -d, -f1 <<<"$BEST_LATENCY")**"
 echo "- Optimization: **$(cut -d, -f3 <<<"$BEST_LATENCY")**"
-echo "- Time: **$(pretty_time "$(cut -d, -f5 <<<"$BEST_LATENCY")")**"
-echo "- WER/CER: **$(pretty_score "$(cut -d, -f7 <<<"$BEST_LATENCY")")** / **$(pretty_score "$(cut -d, -f8 <<<"$BEST_LATENCY")")**"
+echo "- Instruction set: **$(cut -d, -f4 <<<"$BEST_LATENCY")**"
+echo "- Time: **$(pretty_time "$(cut -d, -f6 <<<"$BEST_LATENCY")")**"
+echo "- WER/CER: **$(pretty_score "$(cut -d, -f8 <<<"$BEST_LATENCY")")** / **$(pretty_score "$(cut -d, -f9 <<<"$BEST_LATENCY")")**"
 
 echo
 echo "## 🧠 Lowest Memory"
 echo "- **$(cut -d, -f1 <<<"$BEST_MEMORY")**"
 echo "- Optimization: **$(cut -d, -f3 <<<"$BEST_MEMORY")**"
-echo "- RAM: **$(cut -d, -f6 <<<"$BEST_MEMORY")MB**"
-echo "- WER/CER: **$(pretty_score "$(cut -d, -f7 <<<"$BEST_MEMORY")")** / **$(pretty_score "$(cut -d, -f8 <<<"$BEST_MEMORY")")**"
+echo "- Instruction set: **$(cut -d, -f4 <<<"$BEST_MEMORY")**"
+echo "- RAM: **$(cut -d, -f7 <<<"$BEST_MEMORY")MB**"
+echo "- WER/CER: **$(pretty_score "$(cut -d, -f8 <<<"$BEST_MEMORY")")** / **$(pretty_score "$(cut -d, -f9 <<<"$BEST_MEMORY")")**"
 
 echo
 echo "## 🎯 Best Accuracy"
 if [[ -n "${BEST_WER:-}" ]]; then
-  echo "- Lowest WER Optimization: **$(cut -d, -f3 <<<"$BEST_WER")** (WER **$(pretty_score "$(cut -d, -f7 <<<"$BEST_WER")")**) "
+  echo "- Lowest WER Optimization: **$(cut -d, -f3 <<<"$BEST_WER")** on **$(cut -d, -f4 <<<"$BEST_WER")** (WER **$(pretty_score "$(cut -d, -f8 <<<"$BEST_WER")")**) "
 else
   echo "- Lowest WER: **NA** (no valid WER computed)"
 fi
 if [[ -n "${BEST_CER:-}" ]]; then
-  echo "- Lowest CER Optimization: **$(cut -d, -f3 <<<"$BEST_CER")** (CER **$(pretty_score "$(cut -d, -f8 <<<"$BEST_CER")")**) "
+  echo "- Lowest CER Optimization: **$(cut -d, -f3 <<<"$BEST_CER")** on **$(cut -d, -f4 <<<"$BEST_CER")** (CER **$(pretty_score "$(cut -d, -f9 <<<"$BEST_CER")")**) "
 else
   echo "- Lowest CER: **NA** (no valid CER computed)"
 fi
