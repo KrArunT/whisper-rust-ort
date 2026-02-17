@@ -15,7 +15,18 @@ MAX_CORES_PER_RUN="${MAX_CORES_PER_RUN:-8}"
 ENABLE_TASKSET_PINNING="${ENABLE_TASKSET_PINNING:-1}"  # 1 | 0
 PIN_CCDS="${PIN_CCDS:-}"        # e.g. "0" or "0,1" (L3/CCD ids)
 PIN_CPUS="${PIN_CPUS:-}"        # explicit cpu list, e.g. "0-7,16-23" (overrides strategy)
+CORE_LIST="${CORE_LIST:-}"      # alias for PIN_CPUS
+CPUSET_LIST="${CPUSET_LIST:-}"  # alias for PIN_CPUS
 NUM_BEAMS="${NUM_BEAMS:-1}"
+
+# Backward-compatible aliases for explicit CPU lists.
+if [[ -z "$PIN_CPUS" ]]; then
+  if [[ -n "$CORE_LIST" ]]; then
+    PIN_CPUS="$CORE_LIST"
+  elif [[ -n "$CPUSET_LIST" ]]; then
+    PIN_CPUS="$CPUSET_LIST"
+  fi
+fi
 
 # Whisper baseline settings
 BASELINE_MODEL="${BASELINE_MODEL:-base}"   # whisper model name: tiny/base/small/...
@@ -35,8 +46,8 @@ time_to_seconds() {
 
 pretty_time() {
   awk -v t="$1" 'BEGIN{
-    if (t < 60) printf "%.0fs", t
-    else printf "%dm%ds", int(t/60), int(t%60)
+    if (t < 60) printf "%.2fs", t
+    else printf "%dm%.2fs", int(t/60), (t - (int(t/60) * 60))
   }'
 }
 
@@ -134,6 +145,28 @@ get_online_cpus() {
   fi
 }
 
+get_allowed_cpus() {
+  local affinity
+  if command -v taskset >/dev/null 2>&1; then
+    affinity="$(taskset -pc $$ 2>/dev/null | sed -E 's/.*: *//')"
+    if [[ -n "$affinity" ]]; then
+      expand_number_list "$affinity" | sort -n -u
+      return 0
+    fi
+  fi
+  get_online_cpus
+}
+
+default_core_count() {
+  local host_cores
+  host_cores="$(nproc 2>/dev/null || echo 1)"
+  if [[ "$MAX_CORES_PER_RUN" =~ ^[0-9]+$ ]] && (( MAX_CORES_PER_RUN > 0 && MAX_CORES_PER_RUN < host_cores )); then
+    echo "$MAX_CORES_PER_RUN"
+  else
+    echo "$host_cores"
+  fi
+}
+
 build_numa_cpu_candidates() {
   local out_file="$1"
   local lscpu_file="$TMP_DIR/lscpu_cpu_node.csv"
@@ -206,14 +239,20 @@ filter_and_limit_cpus() {
 }
 
 prepare_taskset_pinning() {
-  local online_file="$TMP_DIR/online_cpus.txt"
+  local allowed_file="$TMP_DIR/allowed_cpus.txt"
   local candidates_file="$TMP_DIR/pin_candidates.txt"
   local selected_file="$TMP_DIR/pin_selected.txt"
   local strategy="${PIN_STRATEGY}"
+  local max_cores="$MAX_CORES_PER_RUN"
   local pin_desc=""
 
   TASKSET_CPU_LIST=""
   PINNING_DESC="disabled"
+  RUN_CORE_COUNT="$(default_core_count)"
+
+  if [[ ! "$max_cores" =~ ^[0-9]+$ ]]; then
+    max_cores=0
+  fi
 
   if [[ "$ENABLE_TASKSET_PINNING" != "1" ]]; then
     echo "📌 CPU pinning disabled (ENABLE_TASKSET_PINNING=$ENABLE_TASKSET_PINNING)"
@@ -224,14 +263,15 @@ prepare_taskset_pinning() {
     return 0
   fi
 
-  get_online_cpus > "$online_file"
-  if [[ ! -s "$online_file" ]]; then
-    echo "⚠️  Could not detect online CPUs; running without CPU pinning."
+  get_allowed_cpus > "$allowed_file"
+  if [[ ! -s "$allowed_file" ]]; then
+    echo "⚠️  Could not detect allowed CPUs; running without CPU pinning."
     return 0
   fi
 
   if [[ -n "$PIN_CPUS" ]]; then
-    expand_number_list "$PIN_CPUS" | sort -n -u > "$candidates_file"
+    # Keep user order from explicit core list; de-dup/validity handled later.
+    expand_number_list "$PIN_CPUS" > "$candidates_file"
     pin_desc="explicit(PIN_CPUS=$PIN_CPUS)"
   else
     case "$strategy" in
@@ -244,7 +284,7 @@ prepare_taskset_pinning() {
           fi
         else
           echo "⚠️  Could not build CCD-aware CPU set; falling back to flat."
-          cat "$online_file" > "$candidates_file"
+          cat "$allowed_file" > "$candidates_file"
           pin_desc="flat(fallback)"
         fi
         ;;
@@ -253,25 +293,29 @@ prepare_taskset_pinning() {
           pin_desc="numa(node=$NUMA_NODE)"
         else
           echo "⚠️  Could not build NUMA CPU set; falling back to flat."
-          cat "$online_file" > "$candidates_file"
+          cat "$allowed_file" > "$candidates_file"
           pin_desc="flat(fallback)"
         fi
         ;;
       flat|*)
-        cat "$online_file" > "$candidates_file"
+        cat "$allowed_file" > "$candidates_file"
         pin_desc="flat"
         ;;
     esac
   fi
 
-  filter_and_limit_cpus "$online_file" "$candidates_file" "$selected_file" "$MAX_CORES_PER_RUN"
+  filter_and_limit_cpus "$allowed_file" "$candidates_file" "$selected_file" "$max_cores"
   if [[ ! -s "$selected_file" ]]; then
     echo "⚠️  Selected CPU set is empty; running without CPU pinning."
     return 0
   fi
 
   TASKSET_CPU_LIST="$(paste -sd, "$selected_file")"
-  PINNING_DESC="$pin_desc cores=${MAX_CORES_PER_RUN} cpus=${TASKSET_CPU_LIST}"
+  RUN_CORE_COUNT="$(wc -l < "$selected_file" | tr -d ' ')"
+  if [[ ! "$RUN_CORE_COUNT" =~ ^[0-9]+$ ]] || (( RUN_CORE_COUNT <= 0 )); then
+    RUN_CORE_COUNT=1
+  fi
+  PINNING_DESC="$pin_desc selected_cores=${RUN_CORE_COUNT} cpus=${TASKSET_CPU_LIST}"
   echo "📌 CPU pinning enabled: $PINNING_DESC"
 }
 
@@ -470,6 +514,25 @@ def extract_text_from_csv(csv_path: str) -> str:
             parts.append(t)
         return "\n".join(parts).strip()
 
+def average_end_to_end_latency(csv_path: str) -> float:
+    p = Path(csv_path)
+    if not p.exists():
+        raise SystemExit(f"CSV not found: {csv_path}")
+    with p.open("r", encoding="utf-8", errors="ignore", newline="") as f:
+        reader = csv.DictReader(f)
+        vals = []
+        for row in reader:
+            v = (row.get("end_to_end_s") or "").strip()
+            if not v:
+                continue
+            try:
+                vals.append(float(v))
+            except ValueError:
+                continue
+    if not vals:
+        raise SystemExit(f"No valid end_to_end_s values in: {csv_path}")
+    return sum(vals) / len(vals)
+
 def main():
     cmd = sys.argv[1]
     if cmd == "baseline":
@@ -493,6 +556,11 @@ def main():
         wer, cer = wer_cer(ref, hyp)
         print(f"{wer:.6f},{cer:.6f}")
         return
+    if cmd == "avg_latency_csv":
+        csv_path = sys.argv[2]
+        avg = average_end_to_end_latency(csv_path)
+        print(f"{avg:.6f}")
+        return
     raise SystemExit("Unknown command")
 
 if __name__ == "__main__":
@@ -511,7 +579,12 @@ echo "implementation,precision,optimization,instruction_set,beam_size,time_sec,r
 ##################################################
 
 echo "🎯 Generating baseline transcripts with OpenAI Whisper '${BASELINE_MODEL}'..."
-uv run python3 "$PY_HELPER" baseline "$AUDIO_DIR" "$BASELINE_DIR" "$BASELINE_MODEL" "$BASELINE_LANG"
+if [[ -n "$TASKSET_CPU_LIST" ]]; then
+  taskset -c "$TASKSET_CPU_LIST" \
+    uv run python3 "$PY_HELPER" baseline "$AUDIO_DIR" "$BASELINE_DIR" "$BASELINE_MODEL" "$BASELINE_LANG"
+else
+  uv run python3 "$PY_HELPER" baseline "$AUDIO_DIR" "$BASELINE_DIR" "$BASELINE_MODEL" "$BASELINE_LANG"
+fi
 # baseline_all.txt will exist inside BASELINE_DIR
 if [[ ! -f "$BASELINE_ALL_TXT" ]]; then
   echo "❌ Baseline transcript missing: $BASELINE_ALL_TXT"
@@ -553,9 +626,9 @@ for onnx_dir in "$MODELS_ROOT"/*; do
         --task transcribe \
         --max-new-tokens 128 \
         --num-beams "$NUM_BEAMS" \
-        --intra-op 1 \
+        --intra-op "$RUN_CORE_COUNT" \
         --inter-op 1 \
-        --chunk-parallelism 8 \
+        --chunk-parallelism "$RUN_CORE_COUNT" \
         --warmup 1 \
         --out-csv "$MODEL_CSV" \
         --out-json "$MODEL_JSON" \
@@ -570,9 +643,9 @@ for onnx_dir in "$MODELS_ROOT"/*; do
         --task transcribe \
         --max-new-tokens 128 \
         --num-beams "$NUM_BEAMS" \
-        --intra-op 1 \
+        --intra-op "$RUN_CORE_COUNT" \
         --inter-op 1 \
-        --chunk-parallelism 8 \
+        --chunk-parallelism "$RUN_CORE_COUNT" \
         --warmup 1 \
         --out-csv "$MODEL_CSV" \
         --out-json "$MODEL_JSON" \
@@ -581,7 +654,13 @@ for onnx_dir in "$MODELS_ROOT"/*; do
   fi
 
   RAW_TIME=$(grep "Elapsed (wall clock) time" "$TIME_LOG" | awk '{print $NF}')
-  TIME_SEC=$(time_to_seconds "$RAW_TIME")
+  WALL_TIME_SEC=$(time_to_seconds "$RAW_TIME")
+  AVG_TIME_SEC="$(python3 "$PY_HELPER" avg_latency_csv "$MODEL_CSV" || true)"
+  if [[ -n "${AVG_TIME_SEC:-}" ]]; then
+    TIME_SEC="$AVG_TIME_SEC"
+  else
+    TIME_SEC="$WALL_TIME_SEC"
+  fi
 
   PEAK_KB=$(grep "Maximum resident set size" "$TIME_LOG" | awk '{print $6}')
   PEAK_MB=$(awk "BEGIN { printf \"%.0f\", $PEAK_KB / 1024 }")
@@ -625,11 +704,12 @@ echo "# ⚡ Whisper ONNX Inference Benchmark"
 echo
 echo "**Baseline (accuracy reference):** OpenAI Whisper \`$BASELINE_MODEL\` via python \`whisper\` library"
 echo "**CPU pinning:** \`$PINNING_DESC\`"
+echo "**Time column:** average end-to-end latency per audio from \`inference_per_file.csv\`"
 echo
 echo "| Implementation | Precision | Optimization | Instruction Set | Beam size | Time | RAM Usage | WER | CER |"
 echo "|---------------|-----------|--------------|-----------------|-----------|------|-----------|-----|-----|"
 
-tail -n +2 "$MERGED_MODEL_CSV" | \
+tail -n +2 "$MERGED_MODEL_CSV" | sort -t, -k2,2 -k3,3V -k4,4 | \
 while IFS=, read -r impl prec opt isa beam t ram wer cer; do
   printf "| %s | %s | %s | %s | %s | %s | %sMB | %s | %s |\n" \
     "$impl" "$prec" "$opt" "$isa" "$beam" "$(pretty_time "$t")" "$ram" "$(pretty_score "$wer")" "$(pretty_score "$cer")"
